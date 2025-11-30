@@ -12,6 +12,7 @@ import numpy as np
 import math
 import altair as alt
 import time
+from datetime import datetime
 
 tracker = GachaHistoryTracker()
 
@@ -460,6 +461,8 @@ if st.button("🎰 Roll", type="primary"):
                     new_entries.append(result)
         st.session_state["log"].extend(new_entries)
         tracker.load_from_log(st.session_state["log"])
+        df_auto = pd.DataFrame(st.session_state["log"])
+        df_auto.to_csv("logs/gacha_history.csv", index=False, encoding="utf-8-sig")
         st.session_state["show_curve_analysis"] = False
     else:
         st.warning("⏳ Please wait a moment before clicking again.")
@@ -480,6 +483,8 @@ if st.button("🎲 Multi-Roll"):
                     new_entries.append(result)
         st.session_state["log"].extend(new_entries)
         tracker.load_from_log(st.session_state["log"])
+        df_auto = pd.DataFrame(st.session_state["log"])
+        df_auto.to_csv("logs/gacha_history.csv", index=False, encoding="utf-8-sig")
         st.session_state["show_curve_analysis"] = False
     else:
         st.warning("⏳ Please wait a moment before clicking again.")
@@ -883,3 +888,32 @@ if st.session_state["show_curve_analysis"]:
             if charts:
                 chart = alt.layer(*charts).resolve_scale(y='independent').interactive()
                 st.altair_chart(chart, use_container_width=True)
+
+from character.character import Character
+from character.validator import ValidationReport
+
+st.markdown("---")
+st.header("🧬 Character Builder Integration")
+
+if st.button("🧪 Generate Character From Gacha"):
+    report = ValidationReport()
+    char = Character()
+
+    char.load_gacha_possession("gacha_log/repeats.json", report)
+    char.load_gacha_csv("logs/gacha_history.csv", report)
+    char.load_free_categories("characterfiles", report)
+    
+    data = char.build()
+
+    st.subheader("📌 Final Stats")
+    st.json(data["stats"])
+
+    st.subheader("🔥 Resistances")
+    st.json(data["resistances"])
+
+    st.subheader("📚 Additional Fields")
+    st.json(data["fields"])
+
+    st.markdown("---")
+    st.subheader("🛠 Validation Report")
+    st.json(report.to_dict())

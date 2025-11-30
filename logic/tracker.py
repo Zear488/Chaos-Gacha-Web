@@ -7,6 +7,9 @@ GACHA_LOG_DIR = "gacha_log"
 REPEATS_FILE = os.path.join(GACHA_LOG_DIR, "repeats.json")
 POINTS_FILE = os.path.join(GACHA_LOG_DIR, "points.json")
 
+if not os.path.exists("logs"):
+    os.makedirs("logs")
+
 class GachaHistoryTracker:
     def __init__(self):
         os.makedirs(GACHA_LOG_DIR, exist_ok=True)
