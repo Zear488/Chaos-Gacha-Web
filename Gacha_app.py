@@ -158,13 +158,13 @@ def read_file_with_weight(filename, avg, min_val, max_val):
                     weights.append(weight)
 
                     if temp_description:
-                        descriptions.append(" ".join(temp_description).strip())
+                        descriptions.append("".join(temp_description).strip())
                         temp_description = []
             else:
                 temp_description.append(line)
 
         if temp_description:
-            descriptions.append(" ".join(temp_description).strip())
+            descriptions.append("".join(temp_description).strip())
 
     weightsum = sum(weights)
 
@@ -254,7 +254,7 @@ def perform_gacha_draw(mode, min_val, avg, max_val, num_pulls=1, boost_transcend
                     "Tier": tier,
                     "LuckValue": round(estimated_luck, 2),  # Valor numérico puro
                     "Luck": f"{round(estimated_luck, 2):.2f}%",  # Valor con formato
-                    "Description": desc.replace("#", "").strip(),
+                    "Description": desc.strip(),
                     "Color": color,
                     "Notes": ""
                 }
@@ -1029,17 +1029,20 @@ if st.button("🧪 Generate Character From Gacha"):
     char.load_equipped_rolls("gacha_log/inventory.json")
     char.load_free_categories("characterfiles", report)
 
-    data = char.build()
+    try:
+        data = char.build()
+    except InventoryDataError as error:
+        st.error(f"Unable to load equipped inventory: {error}")
+    else:
+        st.subheader("📌 Final Stats")
+        st.json(data["stats"])
 
-    st.subheader("📌 Final Stats")
-    st.json(data["stats"])
+        st.subheader("🔥 Resistances")
+        st.json(data["resistances"])
 
-    st.subheader("🔥 Resistances")
-    st.json(data["resistances"])
+        st.subheader("📚 Additional Fields")
+        st.json(data["fields"])
 
-    st.subheader("📚 Additional Fields")
-    st.json(data["fields"])
-
-    st.markdown("---")
-    st.subheader("🛠 Validation Report")
-    st.json(report.to_dict())
+        st.markdown("---")
+        st.subheader("🛠 Validation Report")
+        st.json(report.to_dict())
