@@ -1,8 +1,9 @@
 BITÁCORA MAESTRA — CHAOS GACHA WEB
 Proyecto: Zear488/Chaos-Gacha-Web
 Actualización: 26 de noviembre de 2026
-Estado de referencia del repositorio: rama main
-Commit inspeccionado: 1bacfc6ba1fe3214a15a120ffe65f9a684aab066
+Estado de referencia del repositorio: rama fix/category-equipment-slots (cambios pendientes de revisión/merge)
+Commit de implementación inspeccionado: e9b03d2e5fb02250c55827fa57cb31d259699df9
+Commit base: main / 956c6935838e52bc88ce59a474e4cce58a8fd278
 Commit anterior de referencia: 1eea5c6f02f937b34a12cb72130a95f8d8839429
 
 PROPÓSITO DE ESTA BITÁCORA
@@ -136,14 +137,16 @@ ESTADO ACTUAL DEL CÓDIGO:
 - La interfaz de Gacha_app.py permite ver instancias y equipar/desequipar una selección.
 - get_equipment_slots(level) calcula 3 + (level // 10).
 - La interfaz pide el nivel mediante un number_input temporal; no está conectado a un nivel persistente del personaje.
-- IMPORTANTE: la implementación actual cuenta todos los elementos equipados contra un único límite global. Todavía NO cumple los límites independientes por categoría definidos arriba.
+- ACTUALIZADO EN LA RAMA fix/category-equipment-slots: equip_roll() ahora cuenta las instancias equipadas por Type y aplica un límite independiente para Ability, Familiar, Skill y Trait. Cada categoría conserva 3 + (nivel // 10) espacios.
+- Item y cualquier Type no incluido en las cuatro categorías no se pueden equipar; permanecen guardados. La función unequip_roll() sigue permitiendo desequipar una instancia ya equipada, incluso si es un registro heredado de categoría no equipable.
+- La interfaz muestra contadores separados por categoría y evita ofrecer equipamiento para Item.
 - El estado discarded está contemplado, pero no existe todavía una acción de descarte para el usuario.
 
-No considerar terminado el sistema de equipamiento hasta implementar y probar los límites separados por categoría y conectar el nivel con una fuente acordada.
+Los límites separados por categoría ya están implementados en la rama de trabajo y tienen pruebas añadidas. Aún falta ejecutar la suite. El nivel continúa siendo una entrada temporal y no está conectado a una fuente persistente del personaje.
 
 4.5 Descarte y Trash Points (TP)
 
-El descarte permite recuperar TP según el tier, reutilizando los valores existentes en el sistema de repetidos:
+El descarte permite recuperar TP según el tier, reutilizando los valores existentes en el sistema de repetidos. La tabla está implementada como DISCARD_TP_BY_TIER en logic/tracker.py:
 
 Tier         | TP
 Trash        | 0
@@ -164,7 +167,17 @@ Transcendent | 6.075
 - Mantener un registro de descartes es recomendable para auditoría y prevención de duplicaciones.
 - No convertir descartes en materiales ni crear otra moneda: la recompensa acordada es TP.
 
-ESTADO: pendiente. Aunque discarded es un estado aceptado por el inventario, no se encontró una función de descarte ni acreditación de TP por ID. No confundir la validación de un estado con la implementación de la acción.
+ESTADO ACTUAL EN LA RAMA fix/category-equipment-slots:
+- Existe discard_roll() en logic/roll_manager.py.
+- La interfaz requiere confirmación explícita antes del descarte.
+- El tier determina el valor acreditado según la tabla de esta sección.
+- logic/tracker.py guarda discard_transactions en points.json, indexadas por ID de tirada, para evitar doble acreditación.
+- La transacción de TP se registra antes de cambiar el estado de inventario. Si la escritura del inventario falla, el usuario puede reintentar; el ledger evita volver a acreditar TP y permite completar el cambio de estado.
+- Las instancias descartadas dejan de aparecer en get_equipped_rolls(), por lo que dejan de aportar efectos al Character Builder.
+- load_from_log() conserva el ledger y suma sus importes al reconstruir los puntos desde el CSV; así, volver a cargar el historial no elimina los TP obtenidos por descarte.
+- clear_all() limpia también el ledger cuando el usuario borra explícitamente todo el historial.
+- El archivo points.json se escribe mediante reemplazo atómico. Si el archivo está corrupto, se preserva y se bloquean las operaciones que modificarían puntos; la interfaz muestra un aviso.
+- Se añadieron tests/test_discard_transactions.py, pero no se ejecutaron en esta sesión. La implementación queda pendiente de validación automatizada y pruebas manuales.
 
 ======================================================================
 5. SEPARACIÓN DE RESPONSABILIDADES Y ORGANIZACIÓN
@@ -266,46 +279,49 @@ B. Identidad e inventario:
 - La sincronización conserva IDs y estados ya guardados para las filas reconocidas.
 - Gacha_app.py sincroniza las instancias al cargar historial y después de las tiradas.
 - La interfaz muestra IDs, estado, categoría, nombre, tier y rareza.
-- La acción Clear History también llama clear_inventory(), por lo que elimina los registros de instancias además del historial y los datos que limpia el tracker. Tener presente este comportamiento al modificar el borrado.
+- La acción Clear History también llama clear_inventory(), por lo que elimina los registros de instancias además del historial y los datos que limpia el tracker. tracker.clear_all() limpia también discard_transactions. Tener presente que es una acción destructiva.
 
 C. Equipamiento:
-- roll_manager.py incluye get_equipment_slots(), equip_roll(), unequip_roll() y get_equipped_rolls().
-- equip_roll() valida ID, estado y límite global; no permite equipar instancias discarded ni equipar dos veces la misma instancia.
+- roll_manager.py incluye get_equipment_slots(), equip_roll(), unequip_roll(), get_equipped_rolls() y discard_roll().
+- equip_roll() valida ID, estado y límite independiente de la categoría; no permite equipar instancias discarded ni equipar dos veces la misma instancia.
 - unequip_roll() devuelve una instancia equipada al estado stored.
-- Gacha_app.py tiene controles de equipar/desequipar y solicita el nivel mediante un number_input temporal.
-- El límite implementado es global y no está separado por Type/categoría. Esto difiere del diseño acordado.
-- La interfaz solo permite seleccionar instancias stored/equipped; no ofrece todavía acción para descartar.
+- Gacha_app.py muestra el uso de espacios por cada una de las cuatro categorías y solicita el nivel mediante un number_input temporal.
+- Item y otros tipos no equipables se mantienen guardados; la interfaz permite desequipar instancias heredadas ya equipadas.
+- La interfaz permite seleccionar instancias stored/equipped y ofrece descarte con confirmación explícita. Las instancias discarded dejan de estar disponibles para acciones normales.
 
 D. Character Builder:
-- character/character.py todavía carga posesión desde repeats.json y detalles desde logs/gacha_history.csv.
-- apply_gacha_items() busca filas por tipo y nombre, por lo que no distingue correctamente dos instancias iguales.
-- No consume get_equipped_rolls() ni filtra por IDs equipados.
-- La aplicación actual de modificadores desde Description no equivale al sistema nuevo de modificadores aleatorios persistidos por ID.
-- Por tanto, el equipamiento actual guarda estados, pero todavía no activa/desactiva estadísticas dentro de Character Builder.
+- character/character.py ahora carga las instancias mediante get_equipped_rolls() desde gacha_log/inventory.json.
+- apply_gacha_items() procesa exclusivamente las instancias con estado equipped; las stored y discarded no aportan efectos.
+- El procesamiento ya no empareja por nombre ni depende de repeats.json/CSV para decidir qué instancias afectan al personaje.
+- Character Builder conserva el procesamiento de etiquetas descriptivas #STATS, #RESISTANCES y campos genéricos, cuando están presentes en Description.
+- Gacha_app.py ahora preserva los marcadores # y los saltos de línea de Description al crear una tirada, en lugar de eliminar # y aplanar todas las líneas.
+- StatsManager resuelve nombres de estadísticas sin distinguir mayúsculas/minúsculas, para que etiquetas como Mana coincidan con las claves existentes del archivo stats.json.
+- Se eliminó la definición duplicada de load_free_categories(); permanece la versión que usa validate_txt_block().
+- La integración sigue siendo PARCIAL: no hay todavía modificadores aleatorios persistidos por ID ni se confirmó que los archivos actuales de gachafiles contengan etiquetas #STATS/#RESISTANCES. La nueva ruta deja preparada la activación por equipamiento, pero no reemplaza el generador aleatorio pendiente.
 
 E. Duplicación en character.py:
 - Se observan dos definiciones de load_free_categories().
-- En Python, la definición posterior sustituye a la anterior.
-- Revisar cuál implementación debe conservarse; no crear un tercer cargador.
+- La duplicación fue corregida en la rama fix/category-equipment-slots: se conserva la implementación que utiliza validate_txt_block().
 
 F. Ruta del historial:
 - El flujo de tiradas escribe logs/gacha_history.csv y Character Builder carga logs/gacha_history.csv.
 - La ruta coincide en el estado inspeccionado. No cambiarla sin razón y prueba de compatibilidad.
 
 G. Posible pérdida de etiquetas de descripción:
-- En la inspección anterior, el motor local construía Description usando desc.replace("#", "").
-- character/character.py busca etiquetas como #STATS y #RESISTANCES.
-- La búsqueda de código y el estado actual deben volver a verificarse antes de tocar el formato; no se ha demostrado aquí que el problema esté resuelto.
-- Verificar con datos reales antes de cambiar el formato.
+- El flujo anterior construía Description con desc.replace("#", "") y unía las líneas mediante espacios, lo que impedía que las etiquetas descriptivas llegaran intactas al parser.
+- En la rama fix/category-equipment-slots se cambió a conservar los marcadores y los saltos de línea originales.
+- Falta probar la lectura con archivos reales de gachafiles que contengan etiquetas; la búsqueda de código no encontró ejemplos #STATS en los archivos de datos indexados.
 
 H. Editor de archivos:
 - Gacha_app.py mantiene gachafiles, Original_gachafiles y gachafiles_versions.
 - Conserva la función de edición y versiones; no reemplazarla como parte del sistema de inventario.
 
 I. Pruebas:
-- Se añadió tests/test_roll_manager.py con pruebas para IDs distintos en tiradas idénticas, estabilidad de IDs, normalización de valores CSV, conservación de estados, limpieza de inventario, cálculo de espacios, equipar/desequipar, límite global, rechazo de discarded y protección ante JSON corrupto.
-- La existencia de estas pruebas está comprobada en el repositorio.
-- NO se ejecutó ni verificó una corrida de la suite en esta inspección. No afirmar que las pruebas pasan hasta ejecutarlas.
+- Se añadió tests/test_roll_manager.py con pruebas para IDs distintos en tiradas idénticas, estabilidad de IDs, normalización de valores CSV, conservación de estados, limpieza de inventario, cálculo de espacios, equipar/desequipar, límites por categoría, rechazo de Item/discarded y protección ante JSON corrupto.
+- Se añadió tests/test_character_equipment.py para comprobar que solo las instancias equipped aportan los modificadores de Description y que las claves de estadísticas con distinta capitalización se resuelven correctamente.
+- Se añadió tests/test_discard_transactions.py para acreditar TP una sola vez, retirar una instancia equipada, conservar TP tras cargar el historial y proteger un points.json corrupto.
+- La existencia y el contenido de estas pruebas están comprobados en el repositorio.
+- NO se ejecutó ni verificó una corrida de la suite en esta sesión. No afirmar que las pruebas pasan hasta ejecutarlas.
 
 6.3 Funcionalidades incorporadas desde la bitácora anterior
 
@@ -317,24 +333,27 @@ IMPLEMENTADAS EN CÓDIGO:
 - Estados stored/equipped/discarded en la estructura de inventario.
 - Consulta y visualización de inventario individual.
 - Funciones para equipar y desequipar por ID.
-- Cálculo de espacios como 3 + (nivel // 10), con nivel introducido temporalmente por la interfaz.
-- Controles de equipar/desequipar en Gacha_app.py.
-- Pruebas unitarias escritas para el módulo de inventario y equipamiento.
+- Cálculo de espacios por categoría como 3 + (nivel // 10), con nivel introducido temporalmente por la interfaz.
+- Límites independientes de Ability, Familiar, Skill y Trait en logic/roll_manager.py.
+- Interfaz con cuatro contadores de espacios independientes y controles de equipar/desequipar en Gacha_app.py.
+- Item y categorías no definidas rechazadas para equipamiento.
+- Pruebas unitarias escritas para los límites independientes y la exclusión de Item, además de las pruebas previas de inventario.
 
 IMPLEMENTADAS PARCIALMENTE / NO CUMPLEN TODAVÍA EL DISEÑO COMPLETO:
-- Equipamiento: existe, pero el límite es global y no por categoría.
 - Nivel: existe una entrada temporal, pero no una fuente persistente conectada al personaje.
-- Estados: discarded se acepta en la estructura, pero no existe el flujo de descarte.
-- Character Builder: sigue sin basar los cálculos en instancias equipadas.
+- La nueva implementación de límites por categoría está en una rama de trabajo pendiente de revisión/merge y aún requiere ejecutar pruebas.
+- Descarte: el flujo con ledger idempotente está implementado en la rama, pendiente de ejecutar pruebas.
+- Character Builder: ya basa los efectos descriptivos en instancias equipadas; falta integrar los modificadores aleatorios por ID y validar tags con datos reales.
 
 NO IMPLEMENTADAS:
 - Generación aleatoria de modificadores por ID.
 - Persistencia de modificadores aleatorios por instancia.
 - Fórmula y tabla de Luck para cantidad/calidad de estadísticas.
-- Activación de modificadores solo cuando una instancia está equipada.
+- Generación y activación de modificadores aleatorios persistidos por ID; actualmente solo se procesan las etiquetas descriptivas existentes en instancias equipadas.
 - Bonus de estrella aplicado a estadísticas y condicionado por equipamiento.
-- Descarte desde la interfaz y acreditación de TP una sola vez por ID.
-- Integración completa del nuevo inventario con Character Builder.
+- Validación automatizada y manual del descarte y de la acreditación de TP una sola vez por ID.
+- Integración completa del generador de modificadores aleatorios por ID con Character Builder.
+- Verificación con archivos de gachafiles reales que contengan etiquetas descriptivas.
 
 6.4 Último cambio observado
 
@@ -356,9 +375,9 @@ Estas observaciones no significan que se hayan ejecutado pruebas automatizadas. 
 4. Identidad de tiradas: revisar y probar la implementación existente de roll_manager.py; comprobar reconciliación, historial antiguo y repeticiones antes de cambiarla.
 5. Generación persistente: generar modificadores una sola vez por ID y guardarlos; comprobar que recargar no cambia los resultados.
 6. Estados de inventario: mantener guardado, equipado y descartado; persistirlos sin alterar los datos originales del gacha.
-7. Equipamiento: corregir el límite global actual y aplicar límites independientes por categoría; validar según nivel del personaje.
-8. Cálculo de estadísticas: integrar Character Builder con IDs equipados, sumar únicamente modificadores equipados y aplicar el bonus de estrella activo sin doble conteo.
-9. Descarte y TP: acreditar los valores existentes una sola vez y desactivar inmediatamente los efectos de la instancia.
+7. Equipamiento: implementar y probar límites independientes por categoría; conectar el nivel con una fuente acordada.
+8. Cálculo de estadísticas: Character Builder ya consume instancias equipped y procesa etiquetas descriptivas; falta integrar los modificadores aleatorios persistidos por ID y aplicar el bonus de estrella activo sin doble conteo.
+9. Descarte y TP: el flujo está implementado en la rama con ledger idempotente; ejecutar pruebas y validar que la recarga del CSV conserva los TP.
 10. Interfaz: permitir comparar instancias repetidas, equipar/desequipar y descartar; mantenerla sencilla y orientada a escritores.
 11. Pruebas y documentación: ejecutar pruebas, probar casos normales y extremos, actualizar esta bitácora y registrar el commit que contiene los cambios.
 
@@ -376,7 +395,7 @@ Estas observaciones no significan que se hayan ejecutado pruebas automatizadas. 
 - Definir cómo se acreditará TP por descarte sin permitir doble cobro y sin romper el tracker existente.
 - Definir si roll_stats.json es necesario o si los modificadores pueden almacenarse limpiamente en inventory.json.
 - Definir cómo se realizará la copia de seguridad local y recuperación ante archivos dañados.
-- Corregir la diferencia entre espacios globales actuales y límites independientes por categoría acordados.
+- Revisar y fusionar la rama de límites independientes por categoría después de ejecutar pruebas.
 
 No inventar respuestas. Preguntar o proponer opciones antes de fijarlas en código.
 
@@ -426,5 +445,39 @@ Consolida el propósito narrativo del proyecto, las reglas de aleatoriedad, inst
 - Se registra tests/test_roll_manager.py y sus casos cubiertos; no se afirma que la suite haya sido ejecutada.
 - Se registra el último commit inspeccionado: 1bacfc6ba1fe3214a15a120ffe65f9a684aab066, que repara el import multilínea de roll_manager.
 - Se actualiza el orden de implementación para aprovechar lo que ya existe y completar primero las integraciones faltantes.
+
+26-11-2026 — Cuarta actualización (rama fix/category-equipment-slots):
+- Se creó una rama de trabajo desde main para corregir el límite global del equipamiento.
+- logic/roll_manager.py ahora define explícitamente las categorías equipables Ability, Familiar, Skill y Trait.
+- equip_roll() cuenta solo las instancias equipped de la misma categoría que la instancia que se intenta equipar; los espacios de las otras categorías no se consumen.
+- Se conserva la fórmula 3 + (nivel // 10), aplicada por separado a cada categoría.
+- Item y cualquier tipo no incluido en las cuatro categorías no pueden equiparse; permanecen en estado stored.
+- La interfaz Gacha_app.py muestra contadores separados para Ability, Familiar, Skill y Trait.
+- La interfaz permite desequipar registros que ya estuvieran equipados aunque su Type no sea una categoría equipable actual.
+- Se ampliaron tests/test_roll_manager.py para probar límites independientes, crecimiento al nivel 10, independencia entre Ability y Skill y exclusión de Item.
+- Archivos modificados: logic/roll_manager.py, tests/test_roll_manager.py, Gacha_app.py, character/character.py y character/stats_manager.py; se añadió tests/test_character_equipment.py.
+- Commits de esta rama: 07946fa2a46f3e0ef1279c6c61795724463430e7 (lógica), c5925f73504a421b58af4ffda0b832c64da71fb7 (pruebas de inventario), 6d81b3fccda64946fc8d54cba0e563b8259c9c20 y 927624c97ef2e37e8d6d9e6abe933b8d45f257c2 (interfaz), 51d72fa700dc6652b327c5c13ec4ab3643ac60e6 y 483bec69ebed3002d86a6da9176cccfefe5a6e8e (Character Builder), 9d8299f80418e4d711cce277a28766b60c569a11 (integración de interfaz), 9800a5d5e13eeaaef5f98b5390139eb19ad9be42 (pruebas de Character Builder), e5ef00e0ab79d600d8b46e1ebb5e20af3ae428dd y 1ce10d252983ced58419ae31afd9d9211cae633a (preservación de Description y limpieza), 4a869d794ba5ec92722e0110e32add8429ca9d81 y bdf021832869f1bc20428e3c9f94d51bda54c99c (manejo de carga del inventario en Character Builder), 1ec4a26427849d1602f893abd9c87c8d94f90652, e9869d8dfcfa9c361927084639e24692dc731542, c83aae0f36fa185b0e2af657137ac857ba5990d7, 1ace012195121cfba36974304748ef5111802a6d y bc7e2fada6da167399f019858421ffd5b26bf237 (descarte, ledger de TP y protección de points.json), 40b5b608a58413acbcb9b05add3aa5811c907f2f y ec8ca4de85cb7d31e8a0d4257ddd4e0f361a42a7 (interfaz de descarte), ffd7a410911ad1327d4d5a88ddf9cfb659115360 y e9b03d2e5fb02250c55827fa57cb31d259699df9 (pruebas de descarte y protección de puntos).
+- Character Builder ahora usa únicamente instancias equipadas para aplicar los efectos soportados en Description; se corrigió la comparación de nombres de estadísticas ignorando mayúsculas/minúsculas.
+- Se preservan marcadores # y saltos de línea al guardar Description desde el flujo de tiradas, para no eliminar los tags que interpreta el parser.
+- Se eliminó la definición duplicada de load_free_categories().
+- Se añadieron pruebas de integración de Character Builder. Las pruebas fueron añadidas, pero no se ejecutaron en este entorno. Estado de ejecución: PENDIENTE.
+- La rama todavía no está fusionada con main.
+- Pull Request abierto, sin fusionar con main: https://github.com/Zear488/Chaos-Gacha-Web/pull/4.
+
+
+26-11-2026 — Quinta actualización (descarte y Character Builder):
+- Se implementó discard_roll() para descartar una instancia individual por ID y otorgar el TP correspondiente al tier.
+- Los valores de descarte se centralizaron en logic/tracker.py y se reutilizan desde logic/roll_manager.py.
+- points.json ahora conserva un ledger discard_transactions por ID, evitando que una misma instancia otorgue TP más de una vez.
+- La recarga del historial CSV reconstruye los puntos de repetición y conserva los créditos de descarte del ledger.
+- La escritura de JSON del tracker es atómica. Si points.json está corrupto, el programa no lo sobrescribe silenciosamente; muestra un aviso y bloquea cambios de puntos.
+- La interfaz ofrece un checkbox de confirmación antes de descartar y muestra el TP otorgado.
+- Character Builder procesa descripciones solo desde instancias equipped; stored y discarded no aportan modificadores.
+- Se preservan los marcadores # y saltos de línea de Description en el flujo de tiradas para que el parser pueda reconocer tags.
+- StatsManager compara los nombres de estadísticas sin distinguir mayúsculas/minúsculas.
+- Se añadieron pruebas para el flujo de descarte, la idempotencia del TP, la persistencia tras recargar CSV y la protección de points.json corrupto.
+- Las pruebas automatizadas siguen sin ejecutarse; no afirmar que pasan.
+- No hay ejecuciones de GitHub Actions asociadas al último commit inspeccionado.
+- La rama fix/category-equipment-slots sigue abierta en el PR #4 y no está fusionada con main.
 
 FIN DE LA BITÁCORA

@@ -14,6 +14,8 @@ import uuid
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List
 
+from .tracker import DISCARD_TP_BY_TIER
+
 INVENTORY_FILE = os.path.join("gacha_log", "inventory.json")
 INVENTORY_VERSION = 1
 VALID_STATUSES = {"stored", "equipped", "discarded"}
@@ -178,11 +180,35 @@ class InventoryStateError(ValueError):
     """Raised when an inventory state transition is not allowed."""
 
 
+EQUIPMENT_CATEGORIES = ("Ability", "Familiar", "Skill", "Trait")
+
+
 def get_equipment_slots(level: int) -> int:
-    """Return the number of equipment slots: 3 base, +1 per 10 levels."""
+    """Return the slot capacity PER CATEGORY: 3 base, +1 per 10 levels."""
     if isinstance(level, bool) or not isinstance(level, int) or level < 0:
         raise ValueError("El nivel debe ser un entero mayor o igual a 0.")
     return 3 + (level // 10)
+
+
+def _equipment_category(roll: Dict[str, Any]) -> str:
+    """Resolve a roll's equipable category without changing its stored Type."""
+    pull = roll.get("pull", {})
+    roll_type = pull.get("Type", "") if isinstance(pull, dict) else ""
+    for category in EQUIPMENT_CATEGORIES:
+        if str(roll_type).strip().casefold() == category.casefold():
+            return category
+    raise InventoryStateError(
+        f"La categoría '{roll_type}' no tiene espacios de equipamiento. "
+        f"Categorías equipables: {', '.join(EQUIPMENT_CATEGORIES)}."
+    )
+
+
+def _safe_equipment_category(roll: Dict[str, Any]) -> str:
+    """Return an empty category for legacy/non-equipable inventory entries."""
+    try:
+        return _equipment_category(roll)
+    except InventoryStateError:
+        return ""
 
 
 def equip_roll(
@@ -216,13 +242,16 @@ def equip_roll(
     if status == "equipped":
         raise InventoryStateError("Esta tirada ya está equipada.")
 
+    category = _equipment_category(target)
     equipped_count = sum(
         1 for roll in data["rolls"]
         if roll.get("status", "stored") == "equipped"
+        and _safe_equipment_category(roll) == category
     )
     if equipped_count >= slots:
         raise InventoryStateError(
-            f"No hay espacios disponibles: {equipped_count}/{slots} ocupados."
+            f"No hay espacios disponibles para {category}: "
+            f"{equipped_count}/{slots} ocupados."
         )
 
     target["status"] = "equipped"
@@ -256,3 +285,51 @@ def get_equipped_rolls(path: str = INVENTORY_FILE) -> List[Dict[str, Any]]:
         roll for roll in get_inventory(path)
         if roll.get("status", "stored") == "equipped"
     ]
+
+
+
+def discard_roll(
+    roll_id: str,
+    tracker,
+    path: str = INVENTORY_FILE,
+) -> Dict[str, Any]:
+    """Discard one pull and award its tier TP exactly once per roll ID.
+
+    The tracker keeps an idempotency ledger in points.json. TP is recorded
+    before the inventory state is changed, so a retry after an interrupted
+    inventory write cannot award the same roll twice.
+    """
+    if not isinstance(roll_id, str) or not roll_id.strip():
+        raise ValueError("Se requiere un ID de tirada válido.")
+
+    data = _load_inventory(path)
+    target = next(
+        (roll for roll in data["rolls"] if roll.get("id") == roll_id),
+        None,
+    )
+    if target is None:
+        raise InventoryStateError(f"No existe una tirada con ID '{roll_id}'.")
+
+    pull = target.get("pull", {})
+    if not isinstance(pull, dict):
+        raise InventoryStateError("La tirada no contiene datos válidos.")
+
+    tier = str(pull.get("Tier", "")).strip()
+    if tier not in DISCARD_TP_BY_TIER:
+        raise InventoryStateError(
+            f"El tier '{tier or 'vacío'}' no tiene un valor de descarte definido."
+        )
+
+    tp_value = DISCARD_TP_BY_TIER[tier]
+    newly_awarded = tracker.award_discard_points(roll_id, tier)
+
+    if target.get("status", "stored") != "discarded":
+        target["status"] = "discarded"
+        _save_inventory(data, path)
+
+    return {
+        "roll": dict(target),
+        "tier": tier,
+        "tp_value": tp_value,
+        "tp_awarded_now": newly_awarded,
+    }

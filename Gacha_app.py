@@ -11,6 +11,7 @@ from logic.gacha_engine import perform_gacha_draw
 from logic.roll_manager import (
     sync_roll_instances, get_inventory, clear_inventory, InventoryDataError,
     equip_roll, unequip_roll, get_equipment_slots, InventoryStateError,
+    EQUIPMENT_CATEGORIES, discard_roll,
 )
 import numpy as np
 import math
@@ -22,6 +23,11 @@ tracker = GachaHistoryTracker()
 
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Chaos Gacha Web", layout="wide")
+if tracker.points_error:
+    st.sidebar.error(
+        f"Transcendent Points file could not be read safely: {tracker.points_error} "
+        "The original file has been preserved; point-changing actions are disabled."
+    )
 
 # ------------------ LOAD EXISTING HISTORY ------------------
 st.sidebar.header("📂 Load Previous History")
@@ -113,7 +119,7 @@ if st.sidebar.button("🗑️ Clear History"):
     clear_inventory()
 
 # Mostrar puntos actuales
-st.sidebar.markdown(f"⭐ Transcendent Points: `{tracker.get_points()}`")
+st.sidebar.markdown(f"⭐ Transcendent Points: `{tracker.get_points():.3f}`")
 
 # ------------------ READ FUNCTION ------------------
 
@@ -157,13 +163,13 @@ def read_file_with_weight(filename, avg, min_val, max_val):
                     weights.append(weight)
 
                     if temp_description:
-                        descriptions.append(" ".join(temp_description).strip())
+                        descriptions.append("".join(temp_description).strip())
                         temp_description = []
             else:
                 temp_description.append(line)
 
         if temp_description:
-            descriptions.append(" ".join(temp_description).strip())
+            descriptions.append("".join(temp_description).strip())
 
     weightsum = sum(weights)
 
@@ -253,7 +259,7 @@ def perform_gacha_draw(mode, min_val, avg, max_val, num_pulls=1, boost_transcend
                     "Tier": tier,
                     "LuckValue": round(estimated_luck, 2),  # Valor numérico puro
                     "Luck": f"{round(estimated_luck, 2):.2f}%",  # Valor con formato
-                    "Description": desc.replace("#", "").strip(),
+                    "Description": desc.strip(),
                     "Color": color,
                     "Notes": ""
                 }
@@ -940,11 +946,16 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                 key="inventory_character_level",
             )
             slot_limit = get_equipment_slots(int(character_level))
-            equipped_count = sum(
-                1 for instance in inventory_instances
-                if instance.get("status", "stored") == "equipped"
-            )
-            st.write(f"Equipment slots: **{equipped_count}/{slot_limit}**")
+            st.caption("Equipment limits are independent for each category.")
+            slot_columns = st.columns(len(EQUIPMENT_CATEGORIES))
+            for column, category in zip(slot_columns, EQUIPMENT_CATEGORIES):
+                category_count = sum(
+                    1 for instance in inventory_instances
+                    if instance.get("status", "stored") == "equipped"
+                    and str(instance.get("pull", {}).get("Type", "")).strip().casefold()
+                    == category.casefold()
+                )
+                column.metric(category, f"{category_count}/{slot_limit}")
 
             selectable_instances = [
                 instance for instance in inventory_instances
@@ -970,9 +981,28 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                     instance for instance in selectable_instances
                     if instance["id"] == selected_roll_id
                 )
-                action_col1, action_col2 = st.columns(2)
+                selected_type = str(
+                    selected_instance.get("pull", {}).get("Type", "")
+                ).strip()
+                action_col1, action_col2, action_col3 = st.columns(3)
 
-                if selected_instance.get("status", "stored") == "stored":
+                if selected_instance.get("status", "stored") == "equipped":
+                    with action_col2:
+                        if st.button("Unequip selected pull", key="unequip_selected_roll"):
+                            try:
+                                unequip_roll(selected_roll_id)
+                                st.success("Pull returned to stored inventory.")
+                                st.rerun()
+                            except (InventoryStateError, ValueError) as error:
+                                st.error(str(error))
+                elif selected_type.casefold() not in {
+                    category.casefold() for category in EQUIPMENT_CATEGORIES
+                }:
+                    st.info(
+                        f"{selected_type or 'This category'} does not have "
+                        "an equipment slot. Items remain in stored inventory."
+                    )
+                else:
                     with action_col1:
                         if st.button("Equip selected pull", key="equip_selected_roll"):
                             try:
@@ -984,15 +1014,30 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                                 st.rerun()
                             except (InventoryStateError, ValueError) as error:
                                 st.error(str(error))
-                else:
-                    with action_col2:
-                        if st.button("Unequip selected pull", key="unequip_selected_roll"):
-                            try:
-                                unequip_roll(selected_roll_id)
-                                st.success("Pull returned to stored inventory.")
-                                st.rerun()
-                            except (InventoryStateError, ValueError) as error:
-                                st.error(str(error))
+
+                confirm_discard = st.checkbox(
+                    "Confirm irreversible discard",
+                    key=f"confirm_discard_{selected_roll_id}",
+                )
+                with action_col3:
+                    if st.button(
+                        "Discard selected pull",
+                        key="discard_selected_roll",
+                        disabled=not confirm_discard,
+                    ):
+                        try:
+                            result = discard_roll(selected_roll_id, tracker)
+                            if result["tp_awarded_now"]:
+                                st.success(
+                                    f"Discarded. +{result['tp_value']:.3f} TP awarded."
+                                )
+                            else:
+                                st.success(
+                                    "Discard state completed; TP for this ID was already recorded."
+                                )
+                            st.rerun()
+                        except (InventoryStateError, ValueError) as error:
+                            st.error(str(error))
             else:
                 st.info("There are no stored or equipped instances to manage.")
         else:
@@ -1010,21 +1055,22 @@ if st.button("🧪 Generate Character From Gacha"):
     report = ValidationReport()
     char = Character()
 
-    char.load_gacha_possession("gacha_log/repeats.json", report)
-    char.load_gacha_csv("logs/gacha_history.csv", report)
     char.load_free_categories("characterfiles", report)
-    
-    data = char.build()
 
-    st.subheader("📌 Final Stats")
-    st.json(data["stats"])
+    try:
+        data = char.build()
+    except InventoryDataError as error:
+        st.error(f"Unable to load equipped inventory: {error}")
+    else:
+        st.subheader("📌 Final Stats")
+        st.json(data["stats"])
 
-    st.subheader("🔥 Resistances")
-    st.json(data["resistances"])
+        st.subheader("🔥 Resistances")
+        st.json(data["resistances"])
 
-    st.subheader("📚 Additional Fields")
-    st.json(data["fields"])
+        st.subheader("📚 Additional Fields")
+        st.json(data["fields"])
 
-    st.markdown("---")
-    st.subheader("🛠 Validation Report")
-    st.json(report.to_dict())
+        st.markdown("---")
+        st.subheader("🛠 Validation Report")
+        st.json(report.to_dict())
