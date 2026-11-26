@@ -8,7 +8,7 @@ from streamlit.components.v1 import html
 from logic import perform_gacha_draw, GachaHistoryTracker
 from logic.tracker import GachaHistoryTracker
 from logic.gacha_engine import perform_gacha_draw
-from logic.roll_manager import sync_roll_instances, get_inventory, clear_inventory, InventoryDataError
+from logic.roll_manager import (\n    sync_roll_instances, get_inventory, clear_inventory, InventoryDataError,\n    equip_roll, unequip_roll, get_equipment_slots, InventoryStateError,\n)
 import numpy as np
 import math
 import altair as alt
@@ -922,6 +922,76 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                 hide_index=True,
             )
             st.caption(f"Total individual instances: {len(inventory_view)}")
+
+            st.markdown("### Equipment")
+            st.caption(
+                "Equip and unequip individual copies by ID. Only equipped "
+                "instances are intended to affect character statistics."
+            )
+            character_level = st.number_input(
+                "Character level for slot calculation "
+                "(temporary input; no saved level source is connected yet)",
+                min_value=1,
+                value=1,
+                step=1,
+                key="inventory_character_level",
+            )
+            slot_limit = get_equipment_slots(int(character_level))
+            equipped_count = sum(
+                1 for instance in inventory_instances
+                if instance.get("status", "stored") == "equipped"
+            )
+            st.write(f"Equipment slots: **{equipped_count}/{slot_limit}**")
+
+            selectable_instances = [
+                instance for instance in inventory_instances
+                if instance.get("status", "stored") in {"stored", "equipped"}
+            ]
+            if selectable_instances:
+                instance_labels = {
+                    instance["id"]: (
+                        f"{instance.get('pull', {}).get('Element', 'Unknown')} "
+                        f"— {instance.get('pull', {}).get('Type', '')} "
+                        f"[{instance.get('status', 'stored')}] "
+                        f"(ID: {instance['id'][:8]})"
+                    )
+                    for instance in selectable_instances
+                }
+                selected_roll_id = st.selectbox(
+                    "Select an individual pull",
+                    options=[instance["id"] for instance in selectable_instances],
+                    format_func=lambda roll_id: instance_labels[roll_id],
+                    key="selected_inventory_roll_id",
+                )
+                selected_instance = next(
+                    instance for instance in selectable_instances
+                    if instance["id"] == selected_roll_id
+                )
+                action_col1, action_col2 = st.columns(2)
+
+                if selected_instance.get("status", "stored") == "stored":
+                    with action_col1:
+                        if st.button("Equip selected pull", key="equip_selected_roll"):
+                            try:
+                                equip_roll(
+                                    selected_roll_id,
+                                    int(character_level),
+                                )
+                                st.success("Pull equipped successfully.")
+                                st.rerun()
+                            except (InventoryStateError, ValueError) as error:
+                                st.error(str(error))
+                else:
+                    with action_col2:
+                        if st.button("Unequip selected pull", key="unequip_selected_roll"):
+                            try:
+                                unequip_roll(selected_roll_id)
+                                st.success("Pull returned to stored inventory.")
+                                st.rerun()
+                            except (InventoryStateError, ValueError) as error:
+                                st.error(str(error))
+            else:
+                st.info("There are no stored or equipped instances to manage.")
         else:
             st.info("No individual pulls have been saved yet.")
     except InventoryDataError as error:
