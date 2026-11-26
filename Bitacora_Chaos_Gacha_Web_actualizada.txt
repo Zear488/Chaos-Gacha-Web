@@ -2,7 +2,7 @@ BITÁCORA MAESTRA — CHAOS GACHA WEB
 Proyecto: Zear488/Chaos-Gacha-Web
 Actualización: 26 de noviembre de 2026
 Estado de referencia del repositorio: rama fix/category-equipment-slots (cambios pendientes de revisión/merge)
-Commit de implementación inspeccionado: 927624c97ef2e37e8d6d9e6abe933b8d45f257c2
+Commit de implementación inspeccionado: 1ce10d252983ced58419ae31afd9d9211cae633a
 Commit base: main / 956c6935838e52bc88ce59a474e4cce58a8fd278
 Commit anterior de referencia: 1eea5c6f02f937b34a12cb72130a95f8d8839429
 
@@ -280,26 +280,27 @@ C. Equipamiento:
 - La interfaz solo permite seleccionar instancias stored/equipped; no ofrece todavía acción para descartar.
 
 D. Character Builder:
-- character/character.py todavía carga posesión desde repeats.json y detalles desde logs/gacha_history.csv.
-- apply_gacha_items() busca filas por tipo y nombre, por lo que no distingue correctamente dos instancias iguales.
-- No consume get_equipped_rolls() ni filtra por IDs equipados.
-- La aplicación actual de modificadores desde Description no equivale al sistema nuevo de modificadores aleatorios persistidos por ID.
-- Por tanto, el equipamiento actual guarda estados, pero todavía no activa/desactiva estadísticas dentro de Character Builder.
+- character/character.py ahora carga las instancias mediante get_equipped_rolls() desde gacha_log/inventory.json.
+- apply_gacha_items() procesa exclusivamente las instancias con estado equipped; las stored y discarded no aportan efectos.
+- El procesamiento ya no empareja por nombre ni depende de repeats.json/CSV para decidir qué instancias afectan al personaje.
+- Character Builder conserva el procesamiento de etiquetas descriptivas #STATS, #RESISTANCES y campos genéricos, cuando están presentes en Description.
+- Gacha_app.py ahora preserva los marcadores # y los saltos de línea de Description al crear una tirada, en lugar de eliminar # y aplanar todas las líneas.
+- StatsManager resuelve nombres de estadísticas sin distinguir mayúsculas/minúsculas, para que etiquetas como Mana coincidan con las claves existentes del archivo stats.json.
+- Se eliminó la definición duplicada de load_free_categories(); permanece la versión que usa validate_txt_block().
+- La integración sigue siendo PARCIAL: no hay todavía modificadores aleatorios persistidos por ID ni se confirmó que los archivos actuales de gachafiles contengan etiquetas #STATS/#RESISTANCES. La nueva ruta deja preparada la activación por equipamiento, pero no reemplaza el generador aleatorio pendiente.
 
 E. Duplicación en character.py:
 - Se observan dos definiciones de load_free_categories().
-- En Python, la definición posterior sustituye a la anterior.
-- Revisar cuál implementación debe conservarse; no crear un tercer cargador.
+- La duplicación fue corregida en la rama fix/category-equipment-slots: se conserva la implementación que utiliza validate_txt_block().
 
 F. Ruta del historial:
 - El flujo de tiradas escribe logs/gacha_history.csv y Character Builder carga logs/gacha_history.csv.
 - La ruta coincide en el estado inspeccionado. No cambiarla sin razón y prueba de compatibilidad.
 
 G. Posible pérdida de etiquetas de descripción:
-- En la inspección anterior, el motor local construía Description usando desc.replace("#", "").
-- character/character.py busca etiquetas como #STATS y #RESISTANCES.
-- La búsqueda de código y el estado actual deben volver a verificarse antes de tocar el formato; no se ha demostrado aquí que el problema esté resuelto.
-- Verificar con datos reales antes de cambiar el formato.
+- El flujo anterior construía Description con desc.replace("#", "") y unía las líneas mediante espacios, lo que impedía que las etiquetas descriptivas llegaran intactas al parser.
+- En la rama fix/category-equipment-slots se cambió a conservar los marcadores y los saltos de línea originales.
+- Falta probar la lectura con archivos reales de gachafiles que contengan etiquetas; la búsqueda de código no encontró ejemplos #STATS en los archivos de datos indexados.
 
 H. Editor de archivos:
 - Gacha_app.py mantiene gachafiles, Original_gachafiles y gachafiles_versions.
@@ -307,6 +308,7 @@ H. Editor de archivos:
 
 I. Pruebas:
 - Se añadió tests/test_roll_manager.py con pruebas para IDs distintos en tiradas idénticas, estabilidad de IDs, normalización de valores CSV, conservación de estados, limpieza de inventario, cálculo de espacios, equipar/desequipar, límites por categoría, rechazo de Item/discarded y protección ante JSON corrupto.
+- Se añadió tests/test_character_equipment.py para comprobar que solo las instancias equipped aportan los modificadores de Description y que las claves de estadísticas con distinta capitalización se resuelven correctamente.
 - La existencia y el contenido de estas pruebas están comprobados en el repositorio.
 - NO se ejecutó ni verificó una corrida de la suite en esta sesión. No afirmar que las pruebas pasan hasta ejecutarlas.
 
@@ -339,7 +341,8 @@ NO IMPLEMENTADAS:
 - Activación de modificadores solo cuando una instancia está equipada.
 - Bonus de estrella aplicado a estadísticas y condicionado por equipamiento.
 - Descarte desde la interfaz y acreditación de TP una sola vez por ID.
-- Integración completa del nuevo inventario con Character Builder.
+- Integración completa del generador de modificadores aleatorios por ID con Character Builder.
+- Verificación con archivos de gachafiles reales que contengan etiquetas descriptivas.
 
 6.4 Último cambio observado
 
@@ -362,7 +365,7 @@ Estas observaciones no significan que se hayan ejecutado pruebas automatizadas. 
 5. Generación persistente: generar modificadores una sola vez por ID y guardarlos; comprobar que recargar no cambia los resultados.
 6. Estados de inventario: mantener guardado, equipado y descartado; persistirlos sin alterar los datos originales del gacha.
 7. Equipamiento: implementar y probar límites independientes por categoría; conectar el nivel con una fuente acordada.
-8. Cálculo de estadísticas: integrar Character Builder con IDs equipados, sumar únicamente modificadores equipados y aplicar el bonus de estrella activo sin doble conteo.
+8. Cálculo de estadísticas: Character Builder ya consume instancias equipped y procesa etiquetas descriptivas; falta integrar los modificadores aleatorios persistidos por ID y aplicar el bonus de estrella activo sin doble conteo.
 9. Descarte y TP: acreditar los valores existentes una sola vez y desactivar inmediatamente los efectos de la instancia.
 10. Interfaz: permitir comparar instancias repetidas, equipar/desequipar y descartar; mantenerla sencilla y orientada a escritores.
 11. Pruebas y documentación: ejecutar pruebas, probar casos normales y extremos, actualizar esta bitácora y registrar el commit que contiene los cambios.
@@ -441,9 +444,13 @@ Consolida el propósito narrativo del proyecto, las reglas de aleatoriedad, inst
 - La interfaz Gacha_app.py muestra contadores separados para Ability, Familiar, Skill y Trait.
 - La interfaz permite desequipar registros que ya estuvieran equipados aunque su Type no sea una categoría equipable actual.
 - Se ampliaron tests/test_roll_manager.py para probar límites independientes, crecimiento al nivel 10, independencia entre Ability y Skill y exclusión de Item.
-- Archivos modificados: logic/roll_manager.py, tests/test_roll_manager.py y Gacha_app.py.
-- Commits de esta rama: 07946fa2a46f3e0ef1279c6c61795724463430e7 (lógica), c5925f73504a421b58af4ffda0b832c64da71fb7 (pruebas), 6d81b3fccda64946fc8d54cba0e563b8259c9c20 y 927624c97ef2e37e8d6d9e6abe933b8d45f257c2 (interfaz).
-- Las pruebas fueron añadidas, pero no se ejecutaron en este entorno. Estado de ejecución: PENDIENTE.
+- Archivos modificados: logic/roll_manager.py, tests/test_roll_manager.py, Gacha_app.py, character/character.py y character/stats_manager.py; se añadió tests/test_character_equipment.py.
+- Commits de esta rama: 07946fa2a46f3e0ef1279c6c61795724463430e7 (lógica), c5925f73504a421b58af4ffda0b832c64da71fb7 (pruebas de inventario), 6d81b3fccda64946fc8d54cba0e563b8259c9c20 y 927624c97ef2e37e8d6d9e6abe933b8d45f257c2 (interfaz), 51d72fa700dc6652b327c5c13ec4ab3643ac60e6 y 483bec69ebed3002d86a6da9176cccfefe5a6e8e (Character Builder), 9d8299f80418e4d711cce277a28766b60c569a11 (integración de interfaz), 9800a5d5e13eeaaef5f98b5390139eb19ad9be42 (pruebas de Character Builder), e5ef00e0ab79d600d8b46e1ebb5e20af3ae428dd y 1ce10d252983ced58419ae31afd9d9211cae633a (preservación de Description y limpieza).
+- Character Builder ahora usa únicamente instancias equipadas para aplicar los efectos soportados en Description; se corrigió la comparación de nombres de estadísticas ignorando mayúsculas/minúsculas.
+- Se preservan marcadores # y saltos de línea al guardar Description desde el flujo de tiradas, para no eliminar los tags que interpreta el parser.
+- Se eliminó la definición duplicada de load_free_categories().
+- Se añadieron pruebas de integración de Character Builder. Las pruebas fueron añadidas, pero no se ejecutaron en este entorno. Estado de ejecución: PENDIENTE.
 - La rama todavía no está fusionada con main.
+- Pull Request abierto como borrador: https://github.com/Zear488/Chaos-Gacha-Web/pull/4.
 
 FIN DE LA BITÁCORA
