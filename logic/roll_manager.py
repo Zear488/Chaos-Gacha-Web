@@ -149,3 +149,8 @@ def sync_roll_instances(
 def get_inventory(path: str = INVENTORY_FILE) -> List[Dict[str, Any]]:
     """Return all saved instances, including equipped and discarded ones."""
     return list(_load_inventory(path)["rolls"])
+
+
+def clear_inventory(path: str = INVENTORY_FILE) -> None:
+    """Clear all pull instances when the user explicitly clears history."""
+    _save_inventory({"version": INVENTORY_VERSION, "rolls": []}, path)
