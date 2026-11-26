@@ -4,11 +4,16 @@ class StatsManager:
         self.mods = {}
 
     def add_stats(self, stat_dict):
-        for k, v in stat_dict.items():
-            self.mods[k] = self.mods.get(k, 0) + v
+        # Description tags are parsed in uppercase, while the existing base
+        # stats file uses mixed-case names such as Mana and Vitality.
+        base_names = {str(name).casefold(): name for name in self.base}
+        for key, value in stat_dict.items():
+            canonical_key = base_names.get(str(key).casefold())
+            if canonical_key is not None:
+                self.mods[canonical_key] = self.mods.get(canonical_key, 0) + value
 
     def finalize(self):
         final = {}
-        for k in self.base:
-            final[k] = self.base[k] + self.mods.get(k, 0)
+        for key in self.base:
+            final[key] = self.base[key] + self.mods.get(key, 0)
         return final
