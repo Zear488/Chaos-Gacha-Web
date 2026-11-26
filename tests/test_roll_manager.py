@@ -56,6 +56,18 @@ class RollManagerTests(unittest.TestCase):
         )
         self.assertEqual(len(get_inventory(self.inventory_path)), 2)
 
+    def test_ids_survive_csv_numeric_type_conversion(self):
+        first = sync_roll_instances([self.pull], path=self.inventory_path)
+        reloaded_pull = dict(self.pull)
+        reloaded_pull["Rarity"] = 3.5
+        reloaded_pull["Luck"] = 50.0
+
+        second = sync_roll_instances(
+            [reloaded_pull],
+            path=self.inventory_path,
+        )
+        self.assertEqual(first[0]["id"], second[0]["id"])
+
     def test_existing_inventory_status_is_preserved(self):
         rolls = sync_roll_instances([self.pull], path=self.inventory_path)
         with open(self.inventory_path, "r", encoding="utf-8") as file:
