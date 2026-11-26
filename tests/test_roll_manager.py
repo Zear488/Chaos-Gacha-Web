@@ -13,6 +13,7 @@ from logic.roll_manager import (
     get_equipment_slots,
     get_equipped_rolls,
     InventoryStateError,
+    EQUIPMENT_CATEGORIES,
 )
 
 
@@ -123,18 +124,51 @@ class RollManagerTests(unittest.TestCase):
         self.assertEqual(inventory[1]["id"], rolls[1]["id"])
         self.assertEqual(inventory[1]["status"], "stored")
 
-    def test_equipment_slot_limit_is_enforced(self):
-        pulls = [dict(self.pull, Element=f"Skill {i}") for i in range(4)]
-        rolls = sync_roll_instances(pulls, path=self.inventory_path)
+    def test_equipment_slot_limit_is_enforced_per_category(self):
+        skill_pulls = [
+            dict(self.pull, Type="Skill", Element=f"Skill {i}")
+            for i in range(4)
+        ]
+        ability_pulls = [
+            dict(self.pull, Type="Ability", Element=f"Ability {i}")
+            for i in range(3)
+        ]
+        rolls = sync_roll_instances(
+            skill_pulls + ability_pulls,
+            path=self.inventory_path,
+        )
+
+        # Three Skill instances fill only the Skill category.
         for roll in rolls[:3]:
             equip_roll(roll["id"], level=9, path=self.inventory_path)
 
         with self.assertRaises(InventoryStateError):
             equip_roll(rolls[3]["id"], level=9, path=self.inventory_path)
 
-        # At level 10, the fourth slot becomes available.
+        # Ability has its own independent three slots at the same level.
+        for roll in rolls[4:]:
+            equip_roll(roll["id"], level=9, path=self.inventory_path)
+
+        self.assertEqual(len(get_equipped_rolls(self.inventory_path)), 6)
+
+        # The fourth Skill slot becomes available at level 10.
         equip_roll(rolls[3]["id"], level=10, path=self.inventory_path)
-        self.assertEqual(len(get_equipped_rolls(self.inventory_path)), 4)
+        self.assertEqual(len(get_equipped_rolls(self.inventory_path)), 7)
+
+    def test_item_is_not_an_equipable_category(self):
+        item = dict(self.pull, Type="Item", Element="Test Item")
+        roll = sync_roll_instances([item], path=self.inventory_path)[0]
+
+        with self.assertRaises(InventoryStateError):
+            equip_roll(roll["id"], level=1, path=self.inventory_path)
+
+        self.assertEqual(get_inventory(self.inventory_path)[0]["status"], "stored")
+
+    def test_equipment_categories_match_the_agreed_four_types(self):
+        self.assertEqual(
+            EQUIPMENT_CATEGORIES,
+            ("Ability", "Familiar", "Skill", "Trait"),
+        )
 
     def test_discarded_roll_cannot_be_equipped(self):
         rolls = sync_roll_instances([self.pull], path=self.inventory_path)
