@@ -23,6 +23,11 @@ tracker = GachaHistoryTracker()
 
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Chaos Gacha Web", layout="wide")
+if tracker.points_error:
+    st.sidebar.error(
+        f"Transcendent Points file could not be read safely: {tracker.points_error} "
+        "The original file has been preserved; point-changing actions are disabled."
+    )
 
 # ------------------ LOAD EXISTING HISTORY ------------------
 st.sidebar.header("📂 Load Previous History")
