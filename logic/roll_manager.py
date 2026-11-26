@@ -283,3 +283,65 @@ def get_equipped_rolls(path: str = INVENTORY_FILE) -> List[Dict[str, Any]]:
         roll for roll in get_inventory(path)
         if roll.get("status", "stored") == "equipped"
     ]
+
+
+
+DISCARD_TP_BY_TIER = {
+    "Trash": 0.0,
+    "Common": 0.001,
+    "Uncommon": 0.003,
+    "Rare": 0.009,
+    "Elite": 0.025,
+    "Epic": 0.075,
+    "Legendary": 0.225,
+    "Mythical": 0.675,
+    "Divine": 2.025,
+    "Transcendent": 6.075,
+}
+
+
+def discard_roll(
+    roll_id: str,
+    tracker,
+    path: str = INVENTORY_FILE,
+) -> Dict[str, Any]:
+    """Discard one pull and award its tier TP exactly once per roll ID.
+
+    The tracker keeps an idempotency ledger in points.json. TP is recorded
+    before the inventory state is changed, so a retry after an interrupted
+    inventory write cannot award the same roll twice.
+    """
+    if not isinstance(roll_id, str) or not roll_id.strip():
+        raise ValueError("Se requiere un ID de tirada válido.")
+
+    data = _load_inventory(path)
+    target = next(
+        (roll for roll in data["rolls"] if roll.get("id") == roll_id),
+        None,
+    )
+    if target is None:
+        raise InventoryStateError(f"No existe una tirada con ID '{roll_id}'.")
+
+    pull = target.get("pull", {})
+    if not isinstance(pull, dict):
+        raise InventoryStateError("La tirada no contiene datos válidos.")
+
+    tier = str(pull.get("Tier", "")).strip()
+    if tier not in DISCARD_TP_BY_TIER:
+        raise InventoryStateError(
+            f"El tier '{tier or 'vacío'}' no tiene un valor de descarte definido."
+        )
+
+    tp_value = DISCARD_TP_BY_TIER[tier]
+    newly_awarded = tracker.award_discard_points(roll_id, tier)
+
+    if target.get("status", "stored") != "discarded":
+        target["status"] = "discarded"
+        _save_inventory(data, path)
+
+    return {
+        "roll": dict(target),
+        "tier": tier,
+        "tp_value": tp_value,
+        "tp_awarded_now": newly_awarded,
+    }
