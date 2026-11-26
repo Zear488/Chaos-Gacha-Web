@@ -171,3 +171,88 @@ def get_inventory(path: str = INVENTORY_FILE) -> List[Dict[str, Any]]:
 def clear_inventory(path: str = INVENTORY_FILE) -> None:
     """Clear all pull instances when the user explicitly clears history."""
     _save_inventory({"version": INVENTORY_VERSION, "rolls": []}, path)
+
+
+
+class InventoryStateError(ValueError):
+    """Raised when an inventory state transition is not allowed."""
+
+
+def get_equipment_slots(level: int) -> int:
+    """Return the number of equipment slots: 3 base, +1 per 10 levels."""
+    if isinstance(level, bool) or not isinstance(level, int) or level < 0:
+        raise ValueError("El nivel debe ser un entero mayor o igual a 0.")
+    return 3 + (level // 10)
+
+
+def equip_roll(
+    roll_id: str,
+    level: int,
+    path: str = INVENTORY_FILE,
+) -> Dict[str, Any]:
+    """Equip one stored pull instance by its unique ID.
+
+    The level is supplied by the caller because the repository does not yet
+    define a single authoritative character-level source.
+    """
+    if not isinstance(roll_id, str) or not roll_id.strip():
+        raise ValueError("Se requiere un ID de tirada válido.")
+
+    slots = get_equipment_slots(level)
+    data = _load_inventory(path)
+    target = None
+
+    for roll in data["rolls"]:
+        if roll.get("id") == roll_id:
+            target = roll
+            break
+
+    if target is None:
+        raise InventoryStateError(f"No existe una tirada con ID '{roll_id}'.")
+
+    status = target.get("status", "stored")
+    if status == "discarded":
+        raise InventoryStateError("No se puede equipar una tirada descartada.")
+    if status == "equipped":
+        raise InventoryStateError("Esta tirada ya está equipada.")
+
+    equipped_count = sum(
+        1 for roll in data["rolls"]
+        if roll.get("status", "stored") == "equipped"
+    )
+    if equipped_count >= slots:
+        raise InventoryStateError(
+            f"No hay espacios disponibles: {equipped_count}/{slots} ocupados."
+        )
+
+    target["status"] = "equipped"
+    _save_inventory(data, path)
+    return dict(target)
+
+
+def unequip_roll(
+    roll_id: str,
+    path: str = INVENTORY_FILE,
+) -> Dict[str, Any]:
+    """Return one equipped pull instance to stored inventory by unique ID."""
+    if not isinstance(roll_id, str) or not roll_id.strip():
+        raise ValueError("Se requiere un ID de tirada válido.")
+
+    data = _load_inventory(path)
+    for roll in data["rolls"]:
+        if roll.get("id") == roll_id:
+            if roll.get("status", "stored") != "equipped":
+                raise InventoryStateError("La tirada no está equipada.")
+            roll["status"] = "stored"
+            _save_inventory(data, path)
+            return dict(roll)
+
+    raise InventoryStateError(f"No existe una tirada con ID '{roll_id}'.")
+
+
+def get_equipped_rolls(path: str = INVENTORY_FILE) -> List[Dict[str, Any]]:
+    """Return only equipped instances, preserving their unique IDs."""
+    return [
+        roll for roll in get_inventory(path)
+        if roll.get("status", "stored") == "equipped"
+    ]
