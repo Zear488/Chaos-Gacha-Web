@@ -11,7 +11,7 @@ from logic.gacha_engine import perform_gacha_draw
 from logic.roll_manager import (
     sync_roll_instances, get_inventory, clear_inventory, InventoryDataError,
     equip_roll, unequip_roll, get_equipment_slots, InventoryStateError,
-    EQUIPMENT_CATEGORIES,
+    EQUIPMENT_CATEGORIES, discard_roll,
 )
 import numpy as np
 import math
@@ -114,7 +114,7 @@ if st.sidebar.button("🗑️ Clear History"):
     clear_inventory()
 
 # Mostrar puntos actuales
-st.sidebar.markdown(f"⭐ Transcendent Points: `{tracker.get_points()}`")
+st.sidebar.markdown(f"⭐ Transcendent Points: `{tracker.get_points():.3f}`")
 
 # ------------------ READ FUNCTION ------------------
 
@@ -979,7 +979,7 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                 selected_type = str(
                     selected_instance.get("pull", {}).get("Type", "")
                 ).strip()
-                action_col1, action_col2 = st.columns(2)
+                action_col1, action_col2, action_col3 = st.columns(3)
 
                 if selected_instance.get("status", "stored") == "equipped":
                     with action_col2:
@@ -1009,6 +1009,30 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                                 st.rerun()
                             except (InventoryStateError, ValueError) as error:
                                 st.error(str(error))
+
+                confirm_discard = st.checkbox(
+                    "Confirm irreversible discard",
+                    key=f"confirm_discard_{selected_roll_id}",
+                )
+                with action_col3:
+                    if st.button(
+                        "Discard selected pull",
+                        key="discard_selected_roll",
+                        disabled=not confirm_discard,
+                    ):
+                        try:
+                            result = discard_roll(selected_roll_id, tracker)
+                            if result["tp_awarded_now"]:
+                                st.success(
+                                    f"Discarded. +{result['tp_value']:.3f} TP awarded."
+                                )
+                            else:
+                                st.success(
+                                    "Discard state completed; TP for this ID was already recorded."
+                                )
+                            st.rerun()
+                        except (InventoryStateError, ValueError) as error:
+                            st.error(str(error))
             else:
                 st.info("There are no stored or equipped instances to manage.")
         else:
