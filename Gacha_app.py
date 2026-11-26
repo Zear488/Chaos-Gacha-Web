@@ -8,7 +8,10 @@ from streamlit.components.v1 import html
 from logic import perform_gacha_draw, GachaHistoryTracker
 from logic.tracker import GachaHistoryTracker
 from logic.gacha_engine import perform_gacha_draw
-from logic.roll_manager import (\n    sync_roll_instances, get_inventory, clear_inventory, InventoryDataError,\n    equip_roll, unequip_roll, get_equipment_slots, InventoryStateError,\n)
+from logic.roll_manager import (
+    sync_roll_instances, get_inventory, clear_inventory, InventoryDataError,
+    equip_roll, unequip_roll, get_equipment_slots, InventoryStateError,
+)
 import numpy as np
 import math
 import altair as alt
