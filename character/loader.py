@@ -55,28 +55,20 @@ def load_free_category(path):
 
 
 def load_stats_base(path="characterfiles/stats.json"):
-    import json
-
     fallback = {
-        "STR": 0, "AGI": 0, "INT": 0, "WIS": 0,
-        "CON": 0, "LCK": 0, "Mana": 0,
-        "Vitality": 0, "Defensa": 0, "Ataque": 0
+        "STR": 1, "AGI": 1, "INT": 1, "WIS": 1,
+        "CON": 1, "LCK": 1, "Mana": 1,
+        "Vitality": 1, "Defensa": 1, "Ataque": 1
     }
 
-    # Si no existe → usar fallback
     if not os.path.exists(path):
         return fallback
 
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-
-            # Validación de estructura
-            if not isinstance(data, dict):
-                raise ValueError("Invalid stats.json structure")
-
-            return data
-
+        if not isinstance(data, dict):
+            raise ValueError("Invalid stats.json structure")
+        return data
     except Exception:
-        # Si está vacío o corrupto → fallback
         return fallback
