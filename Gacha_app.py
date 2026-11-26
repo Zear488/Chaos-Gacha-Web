@@ -981,14 +981,23 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                 ).strip()
                 action_col1, action_col2 = st.columns(2)
 
-                if selected_type.casefold() not in {
+                if selected_instance.get("status", "stored") == "equipped":
+                    with action_col2:
+                        if st.button("Unequip selected pull", key="unequip_selected_roll"):
+                            try:
+                                unequip_roll(selected_roll_id)
+                                st.success("Pull returned to stored inventory.")
+                                st.rerun()
+                            except (InventoryStateError, ValueError) as error:
+                                st.error(str(error))
+                elif selected_type.casefold() not in {
                     category.casefold() for category in EQUIPMENT_CATEGORIES
                 }:
                     st.info(
                         f"{selected_type or 'This category'} does not have "
                         "an equipment slot. Items remain in stored inventory."
                     )
-                elif selected_instance.get("status", "stored") == "stored":
+                else:
                     with action_col1:
                         if st.button("Equip selected pull", key="equip_selected_roll"):
                             try:
@@ -997,15 +1006,6 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                                     int(character_level),
                                 )
                                 st.success("Pull equipped successfully.")
-                                st.rerun()
-                            except (InventoryStateError, ValueError) as error:
-                                st.error(str(error))
-                else:
-                    with action_col2:
-                        if st.button("Unequip selected pull", key="unequip_selected_roll"):
-                            try:
-                                unequip_roll(selected_roll_id)
-                                st.success("Pull returned to stored inventory.")
                                 st.rerun()
                             except (InventoryStateError, ValueError) as error:
                                 st.error(str(error))
