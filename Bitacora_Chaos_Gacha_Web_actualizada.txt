@@ -769,4 +769,204 @@ Próximos pasos:
 - Corregir cualquier fallo y después abrir/revisar el PR.
 - Confirmar que la UI del Character Builder presenta decimales de forma adecuada.
 
+======================================================================
+15. OBSERVACIONES DE REVISIÓN DEL USUARIO Y NUEVOS REQUISITOS
+======================================================================
+
+Fecha: 26-11-2026.
+Origen: revisión manual del usuario sobre la versión de la rama
+feature/persistent-roll-modifiers / PR #6.
+
+IMPORTANTE:
+Esta sección registra requisitos y problemas observados por el usuario.
+En esta actualización solo se modificó la bitácora: no se cambió código,
+no se ejecutaron pruebas y no se afirma que los problemas hayan sido
+reproducidos independientemente. Estos puntos se incorporan al plan y
+deben atenderse antes de considerar completa la etapa.
+
+15.1 Exportación e importación del historial CSV
+
+Problema observado:
+- Desde "Show Roll History" se descarga el CSV del gacha.
+- Al intentar cargar ese mismo CSV, la aplicación devuelve:
+  "Invalid CSV format. Missing columns: Luck, Color, Description".
+- En el archivo descargado se observan las columnas:
+  ID, Status, Type, Element, Tier, Rarity.
+- Por tanto, el CSV exportado actualmente no conserva toda la información
+  que el importador exige ni toda la información necesaria para reconstruir
+  las tiradas y sus estadísticas.
+
+Requisitos:
+- El CSV exportado debe poder importarse de nuevo en otra ocasión sin
+  producir el error de columnas faltantes.
+- Debe conservar el ID único de cada instancia. No regenerar IDs durante
+  una exportación/importación normal ni confundir copias idénticas.
+- Debe incluir los campos que el importador requiere actualmente, como
+  Luck, Color y Description, además de los campos existentes.
+- Debe transportar también los modificadores/estadísticas generados de
+  cada objeto, incluyendo su tipo (flat o percent), estadística, valor y
+  marca de generación/versión cuando corresponda.
+- La importación debe reconstruir los datos de cada instancia, no solo su
+  nombre, categoría y rareza. Debe conservar la relación con ID y estado.
+- Mantener compatibilidad con archivos CSV antiguos cuando sea posible;
+  validar columnas y ofrecer un error claro si falta información que no
+  pueda recuperarse.
+- No volver a sortear estadísticas/modificadores ya incluidos en el archivo.
+
+Criterio de aceptación:
+Exportar el historial, cargar el CSV exportado en otra sesión/ocasión y
+recuperar las mismas instancias con los mismos IDs y modificadores.
+
+15.2 Descuento real de TP al obtener el bonus de estrellas
+
+Problema observado:
+- El usuario informa que los TP no parecen descontarse realmente cuando
+  se obtiene/activa el bonus de estrellas.
+
+Requisitos:
+- Revisar el flujo completo de compra/activación del bonus: validación de
+  saldo, cálculo del coste, descuento y persistencia.
+- El coste debe restarse efectivamente del saldo de TP, no limitarse a
+  mostrar un mensaje o actualizar temporalmente la interfaz.
+- El nuevo saldo debe sobrevivir a recargar la aplicación.
+- Evitar doble descuento por una sola activación y evitar activar el bonus
+  si no hay saldo suficiente.
+- Mostrar con claridad el coste cobrado y el saldo restante.
+- Mantener la protección de transacciones/ledger ya existente para
+  operaciones de TP y no romper los créditos por descarte.
+
+Criterio de aceptación:
+Activar el bonus descuenta exactamente el coste una vez; después de
+recargar, el saldo sigue reflejando el descuento.
+
+15.3 Inspección de modificadores sin equipar el objeto
+
+Problema observado:
+- Actualmente el usuario debe equipar un objeto para poder ver qué ofrece.
+- Incluso equipado, la interfaz no deja suficientemente claro si la
+  mejora es flat o porcentual.
+
+Requisitos:
+- Permitir consultar los modificadores de cualquier instancia desde el
+  inventario, sin necesidad de equiparla.
+- Mostrar por cada modificador: nombre de la estadística, tipo de
+  modificador (Flat / Percent) y valor.
+- Distinguir visual y textualmente, por ejemplo:
+  STR +8 (Flat)
+  STR +7% (Percent)
+- Si una instancia tiene ambos tipos sobre la misma estadística, mostrar
+  ambos por separado.
+- La vista previa es informativa: inspeccionar un objeto no debe equiparlo
+  ni aplicar sus modificadores al personaje.
+- Indicar claramente qué instancias están equipadas y cuáles guardadas.
+
+Criterio de aceptación:
+Desde el inventario se pueden inspeccionar todos los beneficios de una
+instancia y distinguir inmediatamente puntos directos de porcentajes,
+sin alterar el equipamiento ni las estadísticas activas.
+
+15.4 Nivel del personaje basado en las tiradas realizadas
+
+Requisito nuevo:
+- Implementar el sistema de nivel del personaje usando como base la
+  cantidad de tiradas realizadas hasta el momento.
+- El nivel debe derivarse del total de pulls registrados/historial
+  disponible, según una fórmula de progresión que se definirá antes de
+  implementarse.
+- La fuente de datos debe ser consistente y no contar dos veces tiradas
+  repetidas al reconstruir o importar historial.
+- La progresión debe persistir y reconstruirse correctamente al cargar
+  el historial/guardado.
+- No inventar una fórmula, umbrales ni recompensas de nivel en esta
+  actualización. Quedan pendientes de diseño y confirmación.
+- Mantener el alcance como progresión de nivel del personaje; no convertir
+  el proyecto en un juego con combate, misiones, enemigos o economía
+  compleja.
+
+15.5 Sección de datos y edición del personaje
+
+Requisito nuevo:
+- Añadir una sección de perfil/editor junto al área del personaje.
+- Debe permitir escribir y editar datos descriptivos personalizados,
+  usando nombres de campos en inglés.
+- Incluir como mínimo campos/categorías para:
+  Race, Class, Lineage, Talent, Element, Factions, Reputations,
+  Resistances y otros campos descriptivos ya contemplados por el sistema.
+- Mantener Resistances como categoría editable y compatible con los
+  datos de resistencias existentes.
+- La información escrita debe pertenecer al perfil del personaje y no
+  alterar archivos fuente de gachafiles ni las tablas globales del gacha.
+- Permitir añadir/editar texto según el formato que use cada categoría,
+  sin imponer contenido predefinido al usuario.
+
+15.6 Imagen del personaje
+
+- Permitir asociar una imagen/portrait al perfil del personaje.
+- La imagen debe conservarse al guardar y volver a cargar el perfil.
+- La imagen es parte de los datos del personaje, no un elemento temporal
+  de la interfaz.
+- Definir durante implementación un formato/ruta de almacenamiento
+  compatible con el modelo local actual.
+
+15.7 Guardado y recuperación completa del personaje
+
+Requisito principal:
+- Incorporar un medio para guardar el personaje tal como se encuentra y
+  recuperarlo posteriormente.
+- El guardado debe incluir los datos del personaje y los datos necesarios
+  del gacha, tomando en cuenta que el CSV contiene el historial de tiradas.
+- Debe preservar, como mínimo:
+  * Historial/filas del gacha y sus campos necesarios para reconstrucción.
+  * IDs únicos de instancias y estado de cada una (equipped/stored/
+    discarded, según el modelo vigente).
+  * Modificadores generados y sus valores/tipos; no volver a sortearlos.
+  * TP y registro de transacciones para evitar créditos/descuentos dobles.
+  * Nivel del personaje y datos necesarios para reconstruirlo desde el
+    historial, una vez definida la fórmula.
+  * Estadísticas base y cualquier configuración propia del personaje.
+  * Datos descriptivos editados (Race, Class, Factions, Resistances, etc.).
+  * Imagen/portrait asociado.
+- La restauración debe recuperar el estado guardado, no mezclarlo
+  silenciosamente con datos de otra sesión/personaje ni duplicar tiradas.
+- El formato de guardado debe ser portable y coherente con el modo local
+  actual (sin introducir cuentas, login, nube o sincronización).
+- Definir si se usará un archivo de perfil/paquete de guardado que incluya
+  el historial CSV y los demás datos asociados. No asumir que el CSV por
+  sí solo puede representar todo el estado: el guardado completo debe
+  transportar también inventario, TP, modificadores, perfil e imagen.
+- La importación/exportación CSV seguirá siendo útil para el historial
+  del gacha; el guardado completo del personaje será la vía para restaurar
+  el estado integral.
+
+15.8 Orden de trabajo recomendado
+
+1. Corregir el contrato de exportación/importación CSV y asegurar que
+   exportar y volver a importar conserva IDs y modificadores.
+2. Corregir y validar el descuento persistente de TP del bonus de estrellas.
+3. Añadir inspección de modificadores desde inventario sin equipar.
+4. Diseñar y acordar la fórmula de nivel basada en pulls antes de codificar.
+5. Añadir la sección de perfil/editor del personaje con campos en inglés.
+6. Añadir portrait y persistencia de imagen.
+7. Diseñar e implementar guardado/restauración integral del personaje,
+   incluyendo historial CSV, inventario, IDs, modificadores, TP, nivel,
+   perfil e imagen.
+8. Validar el flujo completo con exportación, importación y recarga.
+
+15.9 Restricciones que siguen vigentes
+
+- Esta actualización es exclusivamente documental. No se autoriza aquí
+  ningún cambio de código.
+- No fusionar PR #6 ni modificar main sin autorización explícita.
+- Mantener almacenamiento LOCAL y uso SINGLE; no agregar autenticación,
+  cuentas, nube ni sincronización.
+- No modificar probabilidades del motor gacha ni archivos fuente de
+  gachafiles para resolver estos requisitos.
+- No generar nuevamente modificadores que ya estén persistidos por ID.
+- Inventario y equipamiento siguen siendo conceptos separados.
+- Las instancias descartadas no aportan estadísticas al personaje.
+- Item continúa excluido del sistema de modificadores/equipamiento
+  estadístico mientras no se acuerde lo contrario.
+- No añadir combate, misiones, enemigos ni sistemas ajenos al alcance
+  de Chaos Gacha Web.
+
 FIN DE LA BITÁCORA
