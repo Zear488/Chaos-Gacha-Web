@@ -722,4 +722,51 @@ Resultado final = 20 + 3 + 6.875 = 29.875.
 Próximo paso:
 Confirmar las reglas de selección de tipo y repetición para implementar el generador persistente sin asumir decisiones que siguen marcadas como pendientes. Después, añadir generación por tier/Luck, persistencia por ID, migración de instancias existentes y pruebas de no reroll, equipamiento, descarte y compatibilidad.
 
+======================================================================
+14. GENERACIÓN PERSISTENTE — REGLAS CONFIRMADAS E IMPLEMENTACIÓN INICIAL
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/persistent-roll-modifiers.
+
+14.1 Confirmación del usuario
+
+Quedan confirmadas estas reglas:
+- Cada espacio de modificador tiene probabilidad 50/50 de ser flat o percent.
+- Una instancia no puede repetir el mismo par (stat, kind).
+- La misma estadística sí puede aparecer una vez como flat y otra como percent.
+La implementación selecciona pares únicos entre las 20 combinaciones posibles (10 estadísticas x 2 tipos), lo que mantiene la selección simétrica de tipos.
+
+14.2 Generador añadido
+
+- Nuevo módulo logic/modifier_generator.py.
+- Define estadísticas disponibles, rangos flat/percent por tier y espacios mínimos/máximos.
+- LuckValue se invierte y limita al intervalo 0–100: L = 100 - clamp(LuckValue, 0, 100).
+- Para tiers con espacio extra, aplica P_extra = 20% + 25% * L/100.
+- Magnitudes usan x = u ** (2 - 1.5 * L/100) y quedan limitadas al rango correspondiente.
+- Los pares (stat, kind) se seleccionan sin reemplazo.
+- Item y Trash no reciben modificadores.
+- Instancias elegibles reciben modifiers, modifiers_generated y modifier_generation_version.
+- logic/roll_manager.py llama ensure_roll_modifiers() durante sync_roll_instances(); resultados se guardan dentro del registro de la instancia en inventory.json. Una instancia con modifiers_generated ya verdadero no se vuelve a sortear.
+- Inventario heredado sin modificadores recibe generación durante la siguiente sincronización del historial, conservando ID y estado.
+- La generación no modifica las filas originales del CSV ni los archivos gachafiles.
+
+14.3 Pruebas añadidas
+
+- tests/test_modifier_generator.py: Luck invertido, rangos por tier, probabilidad de espacio extra, sesgo de magnitud, pares únicos, exclusión de Item/Trash y persistencia sin reroll.
+- tests/test_stats_manager_modifiers.py: cálculo flat/percent, suma de porcentajes, estrellas y validación.
+- tests/test_character_random_modifiers.py: detección de estrella y combinación de modificadores equipados con #STATS.
+
+14.4 Validación pendiente
+
+No se ha ejecutado la suite de pruebas en esta sesión. No declarar las pruebas aprobadas hasta ejecutarlas.
+No se ha realizado validación visual/manual de Streamlit ni inspección con datos reales de todos los archivos gachafiles.
+Los cambios permanecen en esta rama; no se ha fusionado a main.
+
+Próximos pasos:
+- Revisar el diff completo de la rama y compatibilidad con el flujo Streamlit.
+- Ejecutar todas las pruebas en un entorno Python.
+- Corregir cualquier fallo y después abrir/revisar el PR.
+- Confirmar que la UI del Character Builder presenta decimales de forma adecuada.
+
 FIN DE LA BITÁCORA
