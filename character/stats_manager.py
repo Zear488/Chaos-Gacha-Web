@@ -1,19 +1,75 @@
+"""Combine legacy descriptive stats with persistent random roll modifiers.
+
+Legacy #STATS bonuses remain additive and are not amplified by star bonuses.
+Random flat values are added before the sum of random percentages is applied.
+"""
+from __future__ import annotations
+
+
 class StatsManager:
     def __init__(self, base_stats):
-        self.base = base_stats
+        if not isinstance(base_stats, dict):
+            raise TypeError("base_stats debe ser un diccionario.")
+        self.base = dict(base_stats)
         self.mods = {}
+        self.random_flat = {}
+        self.random_percent = {}
+        self.star_count = 0
+
+    def _canonical_stat(self, name):
+        return {str(key).casefold(): key for key in self.base}.get(
+            str(name).casefold()
+        )
 
     def add_stats(self, stat_dict):
-        # Description tags are parsed in uppercase, while the existing base
-        # stats file uses mixed-case names such as Mana and Vitality.
-        base_names = {str(name).casefold(): name for name in self.base}
+        """Add legacy descriptive #STATS values without changing their behavior."""
+        if not isinstance(stat_dict, dict):
+            return
         for key, value in stat_dict.items():
-            canonical_key = base_names.get(str(key).casefold())
-            if canonical_key is not None:
-                self.mods[canonical_key] = self.mods.get(canonical_key, 0) + value
+            canonical = self._canonical_stat(key)
+            if canonical is None:
+                continue
+            self.mods[canonical] = self.mods.get(canonical, 0) + value
 
-    def finalize(self):
+    def add_random_modifiers(self, modifiers):
+        """Accumulate persisted flat/percent modifiers from equipped instances."""
+        if not isinstance(modifiers, (list, tuple)):
+            raise TypeError("modifiers debe ser una lista.")
+        for modifier in modifiers:
+            if not isinstance(modifier, dict):
+                raise ValueError("Cada modificador debe ser un objeto.")
+            stat = self._canonical_stat(modifier.get("stat", ""))
+            kind = modifier.get("kind")
+            value = modifier.get("value")
+            if stat is None:
+                continue
+            if kind not in {"flat", "percent"}:
+                raise ValueError(f"Tipo de modificador inválido: {kind!r}.")
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("El valor del modificador debe ser numérico.")
+            if value < 0:
+                raise ValueError("Los modificadores aleatorios no pueden ser negativos.")
+            target = self.random_flat if kind == "flat" else self.random_percent
+            target[stat] = target.get(stat, 0) + value
+
+    def set_star_count(self, count):
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("star_count debe ser un entero no negativo.")
+        self.star_count = min(count, 4)
+
+    def finalize(self, star_count=None):
+        """Return final stats; star bonus affects only the random contribution."""
+        if star_count is not None:
+            self.set_star_count(star_count)
+
+        star_multiplier = 1 + 0.10 * self.star_count
         final = {}
-        for key in self.base:
-            final[key] = self.base[key] + self.mods.get(key, 0)
+        for key, base_value in self.base.items():
+            legacy = self.mods.get(key, 0)
+            flat = self.random_flat.get(key, 0)
+            percent = self.random_percent.get(key, 0)
+            random_contribution = (
+                (base_value + flat) * (1 + percent / 100) - base_value
+            )
+            final[key] = base_value + legacy + random_contribution * star_multiplier
         return final
