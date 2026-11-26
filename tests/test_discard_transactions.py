@@ -77,8 +77,8 @@ class DiscardTransactionTests(unittest.TestCase):
     def test_corrupt_points_file_is_not_overwritten(self):
         with open(self.points_path, "w", encoding="utf-8") as file:
             file.write("{ broken")
-        with self.assertRaises(ValueError):
-            GachaHistoryTracker()
+        broken_tracker = GachaHistoryTracker()
+        self.assertIsNotNone(broken_tracker.points_error)
         with open(self.points_path, "r", encoding="utf-8") as file:
             self.assertEqual(file.read(), "{ broken")
 
