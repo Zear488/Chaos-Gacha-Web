@@ -11,6 +11,7 @@ from logic.gacha_engine import perform_gacha_draw
 from logic.roll_manager import (
     sync_roll_instances, get_inventory, clear_inventory, InventoryDataError,
     equip_roll, unequip_roll, get_equipment_slots, InventoryStateError,
+    EQUIPMENT_CATEGORIES,
 )
 import numpy as np
 import math
@@ -940,11 +941,16 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                 key="inventory_character_level",
             )
             slot_limit = get_equipment_slots(int(character_level))
-            equipped_count = sum(
-                1 for instance in inventory_instances
-                if instance.get("status", "stored") == "equipped"
-            )
-            st.write(f"Equipment slots: **{equipped_count}/{slot_limit}**")
+            st.caption("Equipment limits are independent for each category.")
+            slot_columns = st.columns(len(EQUIPMENT_CATEGORIES))
+            for column, category in zip(slot_columns, EQUIPMENT_CATEGORIES):
+                category_count = sum(
+                    1 for instance in inventory_instances
+                    if instance.get("status", "stored") == "equipped"
+                    and str(instance.get("pull", {}).get("Type", "")).strip().casefold()
+                    == category.casefold()
+                )
+                column.metric(category, f"{category_count}/{slot_limit}")
 
             selectable_instances = [
                 instance for instance in inventory_instances
@@ -970,9 +976,19 @@ with st.expander("🎒 Individual Roll Inventory", expanded=False):
                     instance for instance in selectable_instances
                     if instance["id"] == selected_roll_id
                 )
+                selected_type = str(
+                    selected_instance.get("pull", {}).get("Type", "")
+                ).strip()
                 action_col1, action_col2 = st.columns(2)
 
-                if selected_instance.get("status", "stored") == "stored":
+                if selected_type.casefold() not in {
+                    category.casefold() for category in EQUIPMENT_CATEGORIES
+                }:
+                    st.info(
+                        f"{selected_type or 'This category'} does not have "
+                        "an equipment slot. Items remain in stored inventory."
+                    )
+                elif selected_instance.get("status", "stored") == "stored":
                     with action_col1:
                         if st.button("Equip selected pull", key="equip_selected_roll"):
                             try:
