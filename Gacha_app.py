@@ -8,7 +8,7 @@ from streamlit.components.v1 import html
 from logic import perform_gacha_draw, GachaHistoryTracker
 from logic.tracker import GachaHistoryTracker
 from logic.gacha_engine import perform_gacha_draw
-from logic.roll_manager import sync_roll_instances, clear_inventory
+from logic.roll_manager import sync_roll_instances, get_inventory, clear_inventory, InventoryDataError
 import numpy as np
 import math
 import altair as alt
@@ -893,6 +893,39 @@ if st.session_state["show_curve_analysis"]:
             if charts:
                 chart = alt.layer(*charts).resolve_scale(y='independent').interactive()
                 st.altair_chart(chart, use_container_width=True)
+
+# ------------------ PERSISTENT ROLL INVENTORY ------------------
+st.markdown("---")
+with st.expander("🎒 Individual Roll Inventory", expanded=False):
+    try:
+        inventory_instances = get_inventory()
+        if inventory_instances:
+            inventory_view = []
+            for instance in inventory_instances:
+                pull = instance.get("pull", {})
+                inventory_view.append({
+                    "ID": instance["id"],
+                    "Status": instance.get("status", "stored"),
+                    "Type": pull.get("Type", ""),
+                    "Element": pull.get("Element", ""),
+                    "Tier": pull.get("Tier", ""),
+                    "Rarity": pull.get("Rarity", ""),
+                })
+
+            st.caption(
+                "Each row is an individual pull. Repeated names remain separate "
+                "instances with their own persistent IDs."
+            )
+            st.dataframe(
+                pd.DataFrame(inventory_view),
+                use_container_width=True,
+                hide_index=True,
+            )
+            st.caption(f"Total individual instances: {len(inventory_view)}")
+        else:
+            st.info("No individual pulls have been saved yet.")
+    except InventoryDataError as error:
+        st.error(str(error))
 
 from character.character import Character
 from character.validator import ValidationReport
