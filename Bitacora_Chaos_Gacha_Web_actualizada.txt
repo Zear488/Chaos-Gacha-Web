@@ -682,4 +682,44 @@ Sexta actualización:
 - Se registran como propuestas pendientes las reglas de selección 50/50 y no repetición del mismo par (stat, kind).
 - Esta actualización es documental. No se modificó código de la aplicación ni se ejecutaron pruebas.
 
+======================================================================
+13. AVANCE DE IMPLEMENTACIÓN — 26-11-2026
+======================================================================
+
+Rama de trabajo: feature/persistent-roll-modifiers.
+Base: main, commit 81f2fc1c7f9b87ac37c52c9d8687711685d30e35.
+Esta rama no se ha fusionado. No se han modificado los archivos originales de gachafiles.
+
+13.1 Cambios de código realizados en esta rama
+
+- characterfiles/stats.json: las diez estadísticas iniciales ahora tienen valor 1.
+- character/loader.py: el fallback de estadísticas también utiliza valor 1 para las diez estadísticas.
+- character/stats_manager.py: ahora conserva los modificadores descriptivos heredados por separado de los modificadores aleatorios flat y percent.
+- StatsManager aplica primero los flat, suma los porcentajes y aplica esa suma una sola vez al subtotal. El bonus de estrellas multiplica únicamente la contribución aleatoria y se limita a cuatro estrellas (+40%).
+- character/character.py: Character Builder aplica los modificadores persistidos en la instancia equipada; solo procesa las instancias que devuelve get_equipped_rolls().
+- La detección de estrella reconoce el prefijo ★ en Element o el texto "Boosted Star Bonus" en Notes. Una instancia cuenta una sola vez aunque ambos marcadores aparezcan.
+- Se añadieron tests/test_stats_manager_modifiers.py y tests/test_character_random_modifiers.py.
+
+13.2 Ejemplo de cálculo cubierto por las pruebas añadidas
+
+Base STR = 20; modificador descriptivo #STATS STR +3; modificadores aleatorios flat +5 y percent +5%; una instancia equipada con estrella.
+Contribución aleatoria = (20 + 5) * 1.05 - 20 = 6.25.
+Con una estrella: 6.25 * 1.10 = 6.875.
+Resultado final = 20 + 3 + 6.875 = 29.875.
+
+13.3 Estado de validación y límites actuales
+
+- Los cambios fueron escritos en GitHub mediante commits en la rama de trabajo.
+- No se ejecutó la suite de pruebas en un entorno Python; las pruebas añadidas están pendientes de ejecución.
+- Todavía no existe el generador aleatorio de modificadores ni la asignación persistente automática por instancia.
+- Todavía no se conectó LuckValue a la generación de modificadores.
+- inventory.json no se ha migrado ni se ha añadido la marca modifiers_generated.
+- No se han alterado las probabilidades ni el motor general del gacha.
+- Las reglas de selección 50/50 entre flat/percent y la prohibición de repetir el mismo par (stat, kind) siguen pendientes de confirmación.
+- La precisión/redondeo visible sigue pendiente de confirmación; los cálculos conservan el valor numérico sin redondeo prematuro.
+- La rama no se ha fusionado y no se ha abierto un PR para esta etapa.
+
+Próximo paso:
+Confirmar las reglas de selección de tipo y repetición para implementar el generador persistente sin asumir decisiones que siguen marcadas como pendientes. Después, añadir generación por tier/Luck, persistencia por ID, migración de instancias existentes y pruebas de no reroll, equipamiento, descarte y compatibilidad.
+
 FIN DE LA BITÁCORA
