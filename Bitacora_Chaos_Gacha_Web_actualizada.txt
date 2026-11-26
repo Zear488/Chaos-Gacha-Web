@@ -2,7 +2,7 @@ BITÁCORA MAESTRA — CHAOS GACHA WEB
 Proyecto: Zear488/Chaos-Gacha-Web
 Actualización: 26 de noviembre de 2026
 Estado de referencia del repositorio: rama fix/category-equipment-slots (cambios pendientes de revisión/merge)
-Commit de implementación inspeccionado: bdf021832869f1bc20428e3c9f94d51bda54c99c
+Commit de implementación inspeccionado: e9b03d2e5fb02250c55827fa57cb31d259699df9
 Commit base: main / 956c6935838e52bc88ce59a474e4cce58a8fd278
 Commit anterior de referencia: 1eea5c6f02f937b34a12cb72130a95f8d8839429
 
@@ -146,7 +146,7 @@ Los límites separados por categoría ya están implementados en la rama de trab
 
 4.5 Descarte y Trash Points (TP)
 
-El descarte permite recuperar TP según el tier, reutilizando los valores existentes en el sistema de repetidos:
+El descarte permite recuperar TP según el tier, reutilizando los valores existentes en el sistema de repetidos. La tabla está implementada como DISCARD_TP_BY_TIER en logic/tracker.py:
 
 Tier         | TP
 Trash        | 0
@@ -167,7 +167,17 @@ Transcendent | 6.075
 - Mantener un registro de descartes es recomendable para auditoría y prevención de duplicaciones.
 - No convertir descartes en materiales ni crear otra moneda: la recompensa acordada es TP.
 
-ESTADO: pendiente. Aunque discarded es un estado aceptado por el inventario, no se encontró una función de descarte ni acreditación de TP por ID. No confundir la validación de un estado con la implementación de la acción.
+ESTADO ACTUAL EN LA RAMA fix/category-equipment-slots:
+- Existe discard_roll() en logic/roll_manager.py.
+- La interfaz requiere confirmación explícita antes del descarte.
+- El tier determina el valor acreditado según la tabla de esta sección.
+- logic/tracker.py guarda discard_transactions en points.json, indexadas por ID de tirada, para evitar doble acreditación.
+- La transacción de TP se registra antes de cambiar el estado de inventario. Si la escritura del inventario falla, el usuario puede reintentar; el ledger evita volver a acreditar TP y permite completar el cambio de estado.
+- Las instancias descartadas dejan de aparecer en get_equipped_rolls(), por lo que dejan de aportar efectos al Character Builder.
+- load_from_log() conserva el ledger y suma sus importes al reconstruir los puntos desde el CSV; así, volver a cargar el historial no elimina los TP obtenidos por descarte.
+- clear_all() limpia también el ledger cuando el usuario borra explícitamente todo el historial.
+- El archivo points.json se escribe mediante reemplazo atómico. Si el archivo está corrupto, se preserva y se bloquean las operaciones que modificarían puntos; la interfaz muestra un aviso.
+- Se añadieron tests/test_discard_transactions.py, pero no se ejecutaron en esta sesión. La implementación queda pendiente de validación automatizada y pruebas manuales.
 
 ======================================================================
 5. SEPARACIÓN DE RESPONSABILIDADES Y ORGANIZACIÓN
@@ -269,15 +279,15 @@ B. Identidad e inventario:
 - La sincronización conserva IDs y estados ya guardados para las filas reconocidas.
 - Gacha_app.py sincroniza las instancias al cargar historial y después de las tiradas.
 - La interfaz muestra IDs, estado, categoría, nombre, tier y rareza.
-- La acción Clear History también llama clear_inventory(), por lo que elimina los registros de instancias además del historial y los datos que limpia el tracker. Tener presente este comportamiento al modificar el borrado.
+- La acción Clear History también llama clear_inventory(), por lo que elimina los registros de instancias además del historial y los datos que limpia el tracker. tracker.clear_all() limpia también discard_transactions. Tener presente que es una acción destructiva.
 
 C. Equipamiento:
-- roll_manager.py incluye get_equipment_slots(), equip_roll(), unequip_roll() y get_equipped_rolls().
+- roll_manager.py incluye get_equipment_slots(), equip_roll(), unequip_roll(), get_equipped_rolls() y discard_roll().
 - equip_roll() valida ID, estado y límite independiente de la categoría; no permite equipar instancias discarded ni equipar dos veces la misma instancia.
 - unequip_roll() devuelve una instancia equipada al estado stored.
 - Gacha_app.py muestra el uso de espacios por cada una de las cuatro categorías y solicita el nivel mediante un number_input temporal.
 - Item y otros tipos no equipables se mantienen guardados; la interfaz permite desequipar instancias heredadas ya equipadas.
-- La interfaz solo permite seleccionar instancias stored/equipped; no ofrece todavía acción para descartar.
+- La interfaz permite seleccionar instancias stored/equipped y ofrece descarte con confirmación explícita. Las instancias discarded dejan de estar disponibles para acciones normales.
 
 D. Character Builder:
 - character/character.py ahora carga las instancias mediante get_equipped_rolls() desde gacha_log/inventory.json.
@@ -309,6 +319,7 @@ H. Editor de archivos:
 I. Pruebas:
 - Se añadió tests/test_roll_manager.py con pruebas para IDs distintos en tiradas idénticas, estabilidad de IDs, normalización de valores CSV, conservación de estados, limpieza de inventario, cálculo de espacios, equipar/desequipar, límites por categoría, rechazo de Item/discarded y protección ante JSON corrupto.
 - Se añadió tests/test_character_equipment.py para comprobar que solo las instancias equipped aportan los modificadores de Description y que las claves de estadísticas con distinta capitalización se resuelven correctamente.
+- Se añadió tests/test_discard_transactions.py para acreditar TP una sola vez, retirar una instancia equipada, conservar TP tras cargar el historial y proteger un points.json corrupto.
 - La existencia y el contenido de estas pruebas están comprobados en el repositorio.
 - NO se ejecutó ni verificó una corrida de la suite en esta sesión. No afirmar que las pruebas pasan hasta ejecutarlas.
 
@@ -340,7 +351,7 @@ NO IMPLEMENTADAS:
 - Fórmula y tabla de Luck para cantidad/calidad de estadísticas.
 - Activación de modificadores solo cuando una instancia está equipada.
 - Bonus de estrella aplicado a estadísticas y condicionado por equipamiento.
-- Descarte desde la interfaz y acreditación de TP una sola vez por ID.
+- Validación automatizada y manual del descarte y de la acreditación de TP una sola vez por ID.
 - Integración completa del generador de modificadores aleatorios por ID con Character Builder.
 - Verificación con archivos de gachafiles reales que contengan etiquetas descriptivas.
 
@@ -366,7 +377,7 @@ Estas observaciones no significan que se hayan ejecutado pruebas automatizadas. 
 6. Estados de inventario: mantener guardado, equipado y descartado; persistirlos sin alterar los datos originales del gacha.
 7. Equipamiento: implementar y probar límites independientes por categoría; conectar el nivel con una fuente acordada.
 8. Cálculo de estadísticas: Character Builder ya consume instancias equipped y procesa etiquetas descriptivas; falta integrar los modificadores aleatorios persistidos por ID y aplicar el bonus de estrella activo sin doble conteo.
-9. Descarte y TP: acreditar los valores existentes una sola vez y desactivar inmediatamente los efectos de la instancia.
+9. Descarte y TP: el flujo está implementado en la rama con ledger idempotente; ejecutar pruebas y validar que la recarga del CSV conserva los TP.
 10. Interfaz: permitir comparar instancias repetidas, equipar/desequipar y descartar; mantenerla sencilla y orientada a escritores.
 11. Pruebas y documentación: ejecutar pruebas, probar casos normales y extremos, actualizar esta bitácora y registrar el commit que contiene los cambios.
 
@@ -445,7 +456,7 @@ Consolida el propósito narrativo del proyecto, las reglas de aleatoriedad, inst
 - La interfaz permite desequipar registros que ya estuvieran equipados aunque su Type no sea una categoría equipable actual.
 - Se ampliaron tests/test_roll_manager.py para probar límites independientes, crecimiento al nivel 10, independencia entre Ability y Skill y exclusión de Item.
 - Archivos modificados: logic/roll_manager.py, tests/test_roll_manager.py, Gacha_app.py, character/character.py y character/stats_manager.py; se añadió tests/test_character_equipment.py.
-- Commits de esta rama: 07946fa2a46f3e0ef1279c6c61795724463430e7 (lógica), c5925f73504a421b58af4ffda0b832c64da71fb7 (pruebas de inventario), 6d81b3fccda64946fc8d54cba0e563b8259c9c20 y 927624c97ef2e37e8d6d9e6abe933b8d45f257c2 (interfaz), 51d72fa700dc6652b327c5c13ec4ab3643ac60e6 y 483bec69ebed3002d86a6da9176cccfefe5a6e8e (Character Builder), 9d8299f80418e4d711cce277a28766b60c569a11 (integración de interfaz), 9800a5d5e13eeaaef5f98b5390139eb19ad9be42 (pruebas de Character Builder), e5ef00e0ab79d600d8b46e1ebb5e20af3ae428dd y 1ce10d252983ced58419ae31afd9d9211cae633a (preservación de Description y limpieza), 4a869d794ba5ec92722e0110e32add8429ca9d81 y bdf021832869f1bc20428e3c9f94d51bda54c99c (manejo de carga del inventario en Character Builder).
+- Commits de esta rama: 07946fa2a46f3e0ef1279c6c61795724463430e7 (lógica), c5925f73504a421b58af4ffda0b832c64da71fb7 (pruebas de inventario), 6d81b3fccda64946fc8d54cba0e563b8259c9c20 y 927624c97ef2e37e8d6d9e6abe933b8d45f257c2 (interfaz), 51d72fa700dc6652b327c5c13ec4ab3643ac60e6 y 483bec69ebed3002d86a6da9176cccfefe5a6e8e (Character Builder), 9d8299f80418e4d711cce277a28766b60c569a11 (integración de interfaz), 9800a5d5e13eeaaef5f98b5390139eb19ad9be42 (pruebas de Character Builder), e5ef00e0ab79d600d8b46e1ebb5e20af3ae428dd y 1ce10d252983ced58419ae31afd9d9211cae633a (preservación de Description y limpieza), 4a869d794ba5ec92722e0110e32add8429ca9d81 y bdf021832869f1bc20428e3c9f94d51bda54c99c (manejo de carga del inventario en Character Builder), 1ec4a26427849d1602f893abd9c87c8d94f90652, e9869d8dfcfa9c361927084639e24692dc731542, c83aae0f36fa185b0e2af657137ac857ba5990d7, 1ace012195121cfba36974304748ef5111802a6d y bc7e2fada6da167399f019858421ffd5b26bf237 (descarte, ledger de TP y protección de points.json), 40b5b608a58413acbcb9b05add3aa5811c907f2f y ec8ca4de85cb7d31e8a0d4257ddd4e0f361a42a7 (interfaz de descarte), ffd7a410911ad1327d4d5a88ddf9cfb659115360 y e9b03d2e5fb02250c55827fa57cb31d259699df9 (pruebas de descarte y protección de puntos).
 - Character Builder ahora usa únicamente instancias equipadas para aplicar los efectos soportados en Description; se corrigió la comparación de nombres de estadísticas ignorando mayúsculas/minúsculas.
 - Se preservan marcadores # y saltos de línea al guardar Description desde el flujo de tiradas, para no eliminar los tags que interpreta el parser.
 - Se eliminó la definición duplicada de load_free_categories().
