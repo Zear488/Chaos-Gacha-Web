@@ -1,10 +1,11 @@
 BITÁCORA MAESTRA — CHAOS GACHA WEB
 Proyecto: Zear488/Chaos-Gacha-Web
 Actualización: 26 de noviembre de 2026
-Estado de referencia del repositorio: rama fix/category-equipment-slots (cambios pendientes de revisión/merge)
-Commit de implementación inspeccionado: e9b03d2e5fb02250c55827fa57cb31d259699df9
-Commit base: main / 956c6935838e52bc88ce59a474e4cce58a8fd278
-Commit anterior de referencia: 1eea5c6f02f937b34a12cb72130a95f8d8839429
+Estado de referencia del repositorio: main, commit de fusión 81f2fc1c7f9b87ac37c52c9d8687711685d30e35
+PR #4 (equipamiento por categoría, Character Builder y descarte/TP): FUSIONADO en main.
+Rama de documentación de esta actualización: docs/update-bitacora-modifier-design.
+La sección 11 contiene la fotografía vigente del repositorio y las decisiones de modificadores; las secciones anteriores conservan el registro histórico y quedan subordinadas a esa actualización cuando exista contradicción.
+Commit anterior de referencia histórica: 1eea5c6f02f937b34a12cb72130a95f8d8839429
 
 PROPÓSITO DE ESTA BITÁCORA
 Conservar las decisiones, el orden de trabajo y el estado real de implementación para retomar el proyecto en futuras sesiones.
@@ -91,10 +92,7 @@ STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa, Ataque.
 
 No cambiar esos nombres ni añadir otras estadísticas sin revisar primero el esquema actual y acordarlo.
 
-ESTADO: pendiente. No se encontró un generador de modificadores aleatorios persistidos por ID ni un archivo de estadísticas por instancia.
-
-Pendiente de especificación:
-Concretar para cada rareza/tier el número mínimo/máximo de estadísticas, los rangos de valores y la fórmula exacta de suerte. No inventar estos parámetros durante la implementación.
+ESTADO: pendiente de implementación. La especificación de tiers, cantidad de espacios, magnitudes y Luck fue acordada después de esta fotografía histórica y queda documentada en la sección 11. No existe todavía un generador de modificadores aleatorios persistidos por ID.
 
 4.3 Bonus de estrella
 
@@ -102,9 +100,11 @@ Concretar para cada rareza/tier el número mínimo/máximo de estadísticas, los
 - El bonus acordado conceptualmente es un aumento global del 10% por cada instancia con bonus de estrella.
 - Evitar contar dos veces la misma estrella si aparece tanto en Element como en Notes.
 - Como las estadísticas solo se activan al equipar una instancia, el bonus de estrella de esa instancia debe seguir el estado de equipamiento: equipada = activo; guardada/desequipada = inactivo; descartada = inactivo.
-- La propuesta actual es acumulación lineal: una estrella = +10%, dos = +20%, tres = +30%. Confirmar al implementar; no sustituirla silenciosamente por composición multiplicativa.
+- DECISIÓN CONFIRMADA: el bonus es lineal, +10% por instancia equipada con ★, con un máximo de +40% (cuatro estrellas contabilizadas).
+- El bonus multiplica únicamente la contribución de los modificadores aleatorios; no aumenta directamente la estadística base.
+- La fórmula y el ejemplo numérico vigentes se documentan en la sección 11.
 
-ESTADO: no implementado ni conectado al equipamiento. La interfaz y el inventario actuales no aplican este bonus a las estadísticas.
+ESTADO: diseño acordado, todavía no implementado ni conectado al equipamiento.
 
 4.4 Inventario, equipamiento y límites
 
@@ -140,9 +140,9 @@ ESTADO ACTUAL DEL CÓDIGO:
 - ACTUALIZADO EN LA RAMA fix/category-equipment-slots: equip_roll() ahora cuenta las instancias equipadas por Type y aplica un límite independiente para Ability, Familiar, Skill y Trait. Cada categoría conserva 3 + (nivel // 10) espacios.
 - Item y cualquier Type no incluido en las cuatro categorías no se pueden equipar; permanecen guardados. La función unequip_roll() sigue permitiendo desequipar una instancia ya equipada, incluso si es un registro heredado de categoría no equipable.
 - La interfaz muestra contadores separados por categoría y evita ofrecer equipamiento para Item.
-- El estado discarded está contemplado, pero no existe todavía una acción de descarte para el usuario.
+- El flujo de descarte para el usuario está implementado en la versión fusionada: confirmación, cambio a discarded y acreditación TP idempotente por ID.
 
-Los límites separados por categoría ya están implementados en la rama de trabajo y tienen pruebas añadidas. Aún falta ejecutar la suite. El nivel continúa siendo una entrada temporal y no está conectado a una fuente persistente del personaje.
+Los límites separados por categoría y el flujo de descarte/TP están fusionados en main. Se añadieron pruebas, pero no se debe afirmar que pasan sin ejecutar la suite. El nivel continúa siendo una entrada temporal y no está conectado a una fuente persistente del personaje.
 
 4.5 Descarte y Trash Points (TP)
 
@@ -323,7 +323,7 @@ I. Pruebas:
 - La existencia y el contenido de estas pruebas están comprobados en el repositorio.
 - NO se ejecutó ni verificó una corrida de la suite en esta sesión. No afirmar que las pruebas pasan hasta ejecutarlas.
 
-6.3 Funcionalidades incorporadas desde la bitácora anterior
+6.3 Funcionalidades incorporadas desde la bitácora anterior (registro histórico; consultar la sección 11 para el estado vigente)
 
 IMPLEMENTADAS EN CÓDIGO:
 - Administrador de inventario individual en logic/roll_manager.py.
@@ -341,8 +341,8 @@ IMPLEMENTADAS EN CÓDIGO:
 
 IMPLEMENTADAS PARCIALMENTE / NO CUMPLEN TODAVÍA EL DISEÑO COMPLETO:
 - Nivel: existe una entrada temporal, pero no una fuente persistente conectada al personaje.
-- La nueva implementación de límites por categoría está en una rama de trabajo pendiente de revisión/merge y aún requiere ejecutar pruebas.
-- Descarte: el flujo con ledger idempotente está implementado en la rama, pendiente de ejecutar pruebas.
+- La implementación de límites independientes por categoría fue fusionada en main mediante PR #4.
+- Descarte: el flujo con ledger idempotente fue fusionado en main mediante PR #4; su validación automatizada sigue pendiente de ejecución.
 - Character Builder: ya basa los efectos descriptivos en instancias equipadas; falta integrar los modificadores aleatorios por ID y validar tags con datos reales.
 
 NO IMPLEMENTADAS:
@@ -461,8 +461,7 @@ Consolida el propósito narrativo del proyecto, las reglas de aleatoriedad, inst
 - Se preservan marcadores # y saltos de línea al guardar Description desde el flujo de tiradas, para no eliminar los tags que interpreta el parser.
 - Se eliminó la definición duplicada de load_free_categories().
 - Se añadieron pruebas de integración de Character Builder. Las pruebas fueron añadidas, pero no se ejecutaron en este entorno. Estado de ejecución: PENDIENTE.
-- La rama todavía no está fusionada con main.
-- Pull Request abierto, sin fusionar con main: https://github.com/Zear488/Chaos-Gacha-Web/pull/4.
+- Estado en la fecha de esta entrada histórica: la rama todavía no estaba fusionada; posteriormente PR #4 fue fusionado en main. Ver actualización de la sección 11.
 
 
 26-11-2026 — Quinta actualización (descarte y Character Builder):
@@ -478,6 +477,209 @@ Consolida el propósito narrativo del proyecto, las reglas de aleatoriedad, inst
 - Se añadieron pruebas para el flujo de descarte, la idempotencia del TP, la persistencia tras recargar CSV y la protección de points.json corrupto.
 - Las pruebas automatizadas siguen sin ejecutarse; no afirmar que pasan.
 - No hay ejecuciones de GitHub Actions asociadas al último commit inspeccionado.
-- La rama fix/category-equipment-slots sigue abierta en el PR #4 y no está fusionada con main.
+- Estado en la fecha de esta entrada histórica: PR #4 todavía no estaba fusionado. Estado vigente posterior: PR #4 fusionado en main; consultar sección 11.
+
+
+======================================================================
+11. ACTUALIZACIÓN VIGENTE — REVISIÓN DE MAIN Y DISEÑO DE MODIFICADORES
+======================================================================
+
+Fecha de actualización: 26-11-2026.
+Repositorio: Zear488/Chaos-Gacha-Web.
+Commit de referencia de main: 81f2fc1c7f9b87ac37c52c9d8687711685d30e35.
+PR #4: fusionado en main. URL: https://github.com/Zear488/Chaos-Gacha-Web/pull/4.
+Rama utilizada para esta actualización documental: docs/update-bitacora-modifier-design.
+
+Esta sección es la referencia vigente. Si alguna sección anterior indica que PR #4 está abierto, que los límites por categoría o el descarte siguen en una rama pendiente, o que las reglas de modificadores aún no se han definido, prevalece esta sección. Las entradas anteriores se conservan como historial de lo que se sabía en sus respectivas fechas.
+
+11.1 Estado del repositorio verificado
+
+- main contiene la fusión del PR #4 en el commit 81f2fc1c7f9b87ac37c52c9d8687711685d30e35.
+- La rama fix/category-equipment-slots ya no debe tratarse como una rama con cambios pendientes de integrar para las funciones del PR #4.
+- logic/roll_manager.py mantiene el inventario persistente por instancia en gacha_log/inventory.json. Cada tirada se identifica por ID y conserva su estado.
+- Los estados stored, equipped y discarded, el equipamiento por ID y los límites independientes de Ability, Familiar, Skill y Trait están incorporados en main.
+- Los límites por categoría siguen la fórmula 3 + (level // 10). El nivel continúa siendo una entrada temporal de interfaz; no se encontró una fuente persistente de nivel de personaje.
+- El descarte individual y el ledger discard_transactions en points.json están incorporados. El ledger evita acreditar TP dos veces por ID y el flujo de recarga conserva los créditos de descarte.
+- Character Builder carga las instancias equipadas, procesa sus descripciones y no aplica efectos desde instancias stored o discarded.
+- character/stats_manager.py todavía realiza suma de modificadores convencionales; no se encontró integrado el cálculo de modificadores aleatorios percent/flat ni el bonus de estrellas.
+- Gacha_app.py conserva LuckValue y Luck en los resultados. No cambiar sus fórmulas ni las probabilidades generales del gacha como parte de esta tarea.
+- Se observaron dos implementaciones/rutas de perform_gacha_draw (Gacha_app.py y logic/gacha_engine.py). No consolidarlas ni modificarlas durante la implementación de modificadores salvo que sea imprescindible y se autorice como tarea separada.
+- En la revisión de main, characterfiles/stats.json y el fallback de character/loader.py tenían las diez estadísticas en 0. Deben actualizarse a 1 para cumplir la decisión de estadísticas iniciales.
+- Existen pruebas de inventario/equipamiento, Character Builder y descarte. No se ejecutó la suite durante esta revisión; estado de ejecución: NO VERIFICADO. No afirmar que pasan.
+
+11.2 Estadísticas iniciales confirmadas
+
+El personaje de nivel 1 debe comenzar con 1 punto en cada una de estas diez estadísticas:
+STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa y Ataque.
+
+Actualizar tanto characterfiles/stats.json como el diccionario fallback de character/loader.py a 1, manteniendo nombres y estructura. Esta modificación todavía está pendiente.
+
+11.3 Reglas confirmadas de modificadores aleatorios
+
+Categorías elegibles:
+- Ability
+- Familiar
+- Skill
+- Trait
+- Item queda excluido de los modificadores estadísticos en esta etapa.
+
+Todos los modificadores aleatorios son positivos. No generar modificadores negativos.
+
+Cada espacio es uno de estos dos tipos:
+- percent: bonificación porcentual.
+- flat: suma puntos directos a una estadística.
+
+Una misma instancia puede tener ambos tipos sobre una misma estadística. Cada entrada consume un espacio individual. Ejemplo: STR +5 flat y STR +5 percent son dos modificadores distintos y consumen dos espacios.
+
+11.4 Cantidad de espacios por tier
+
+Tier         | Cantidad de modificadores
+Trash        | 0
+Common       | 1
+Uncommon     | 1–2
+Rare         | 2
+Elite        | 2–3
+Epic         | 3
+Legendary    | 3–4
+Mythical     | 4
+Divine       | 4–5
+Transcendent | 5–6
+
+Para tiers con intervalo, Luck influye en la probabilidad de obtener el espacio adicional. Los espacios mínimos son garantizados.
+
+11.5 Rangos de magnitud por tier
+
+Bonificaciones porcentuales (percent):
+
+Tier         | Rango
+Common       | +1–3%
+Uncommon     | +2–4%
+Rare         | +3–5%
+Elite        | +4–6%
+Epic         | +5–8%
+Legendary    | +7–10%
+Mythical     | +9–12%
+Divine       | +11–15%
+Transcendent | +14–20%
+
+Puntos directos (flat), tabla actualizada a petición del usuario para que tengan mayor impacto:
+
+Tier         | Rango
+Common       | +2–4
+Uncommon     | +3–5
+Rare         | +4–7
+Elite        | +5–8
+Epic         | +6–10
+Legendary    | +8–13
+Mythical     | +10–16
+Divine       | +13–21
+Transcendent | +17–28
+
+Los rangos flat son una propuesta acordada como dirección de magnitud ("mayores") y esta es la tabla de trabajo vigente. Deben evaluarse mediante pruebas de balance cuando exista la progresión real de estadísticas; no se deben ajustar silenciosamente.
+
+11.6 Cálculo de estadísticas
+
+Los modificadores flat se suman primero; después se suman los porcentajes y se aplican al subtotal:
+
+S_random = (S_base + SUM(flat)) * (1 + SUM(percent) / 100) - S_base
+
+El bonus de estrellas se aplica únicamente a la contribución aleatoria:
+
+S_final = S_base + S_random * B_star
+
+B_star = 1 + 0.10 * MIN(N_star, 4)
+
+Donde N_star es el número de instancias equipadas con estrella. El bonus máximo es +40%. Una instancia con estrella solo cuenta mientras esté equipada. No contar dos veces una estrella que aparezca en Element y también en Notes. No multiplicar cada modificador porcentual de forma compuesta: los porcentajes se suman y se aplican una sola vez al subtotal.
+
+Ejemplo: base Ataque = 20, flat = +5 y percent = +5%.
+- Sin estrellas: (20 + 5) * 1.05 = 26.25.
+- Con dos instancias equipadas con estrella: 20 + (26.25 - 20) * 1.20 = 27.5.
+
+Los modificadores descriptivos existentes de Description/#STATS deben conservar su funcionamiento. La propuesta de separar su contribución de la aleatoria para que las estrellas solo afecten a la parte aleatoria debe validarse al integrar StatsManager; no cambiar la semántica de los tags existentes sin pruebas.
+
+11.7 Luck
+
+Se reutiliza el LuckValue ya producido por el gacha. No cambiar LuckValue, Luck mostrado, ni las probabilidades de tirada.
+
+Para el cálculo interno:
+L = 100 - clamp(LuckValue, 0, 100)
+
+Así, L más alto representa una tirada con mejor suerte.
+
+Probabilidad de obtener el espacio adicional en los tiers con intervalo:
+P_extra = 20% + 25% * (L / 100)
+
+L = 0   -> 20%
+L = 25  -> 26.25%
+L = 50  -> 32.5%
+L = 75  -> 38.75%
+L = 100 -> 45%
+
+La magnitud se sesga hacia el extremo superior del rango según Luck. La distribución acordada como propuesta de trabajo es:
+x = u ** (2 - 1.5 * (L / 100))
+value = min_value + x * (max_value - min_value)
+donde u es uniforme en [0, 1]. Luck bajo concentra más resultados cerca del mínimo; Luck alto desplaza la distribución hacia el máximo. Nunca exceder el rango del tier.
+
+11.8 Reglas de selección todavía propuestas, no confirmadas expresamente
+
+Se había propuesto:
+- Elegir al azar entre las diez estadísticas disponibles.
+- Elegir el tipo flat/percent con probabilidad 50/50 por espacio.
+- No repetir el mismo par (stat, kind) dentro de una misma instancia, aunque sí permitir la misma estadística con el otro tipo.
+
+Estas reglas no fueron seleccionadas en las decisiones finales de la conversación; tratarlas como propuesta pendiente de confirmación antes de codificarlas. No presentarlas como requisito confirmado.
+
+11.9 Persistencia y migración
+
+- Guardar los modificadores finales generados en el propio registro de cada instancia de inventory.json, si la estructura actual lo permite sin duplicar datos.
+- No crear roll_stats.json ni otro archivo separado sin demostrar que inventory.json no puede cubrir el requisito.
+- Estructura conceptual:
+  "modifiers_generated": true
+  "modifier_generation_version": 1
+  "modifiers": [{"stat": "STR", "kind": "flat", "value": 5}, {"stat": "STR", "kind": "percent", "value": 5}]
+- El ejemplo anterior es ilustrativo; adaptar nombres y validación al esquema real.
+- Persistir resultados finales por ID. No volver a sortear al recargar, equipar, desequipar ni cambiar la versión del generador.
+- Una instancia vieja sin modificadores debe generarlos una sola vez cuando corresponda; una instancia que ya tenga resultados debe conservarlos.
+- Los datos originales de gachafiles no se modifican para almacenar los resultados aleatorios.
+- Item queda excluido.
+- Mantener compatibilidad con inventory.json existentes y preservar campos adicionales durante sincronización.
+
+11.10 Orden de implementación actualizado
+
+1. Crear pruebas unitarias para fórmulas de Luck, rangos, cantidad de espacios y tipos de modificadores.
+2. Actualizar las estadísticas iniciales a 1 en characterfiles/stats.json y en el fallback de character/loader.py.
+3. Revisar la estructura exacta de inventory.json y sync_roll_instances() en main; añadir campos sin perder IDs, estados ni metadatos.
+4. Implementar generación persistente por instancia y evitar re-roll.
+5. Integrar el cálculo flat/percent en StatsManager, preservando #STATS/#RESISTANCES.
+6. Integrar el bonus de estrella solo sobre la contribución aleatoria y solo con instancias equipadas.
+7. Conectar Character Builder y comprobar equipar, desequipar y descartar.
+8. Probar compatibilidad con inventarios antiguos, tiradas repetidas, JSON corrupto y cambios de versión.
+9. Ejecutar la suite completa y registrar resultados reales; no declarar pruebas exitosas sin ejecución.
+10. Actualizar esta bitácora al terminar cada etapa.
+
+11.11 Pendientes que sí siguen abiertos
+
+- Confirmar las reglas de selección 50/50 de tipo y no repetición de (stat, kind).
+- Evaluar el balance de rangos flat y percent frente a la progresión real del personaje.
+- Confirmar el manejo de precisión y redondeo en la interfaz (la propuesta es conservar dos decimales, pero no está formalmente confirmada).
+- Determinar si los modificadores descriptivos #STATS deben combinarse de una forma específica con el bonus aleatorio; preservar el comportamiento actual hasta probarlo.
+- Definir la fuente persistente del nivel del personaje; no inventar experiencia ni progresión jugable.
+- Ejecutar las pruebas existentes y las nuevas.
+- Verificar con archivos reales de gachafiles que contengan etiquetas descriptivas.
+
+======================================================================
+12. REGISTRO DE CAMBIOS — ACTUALIZACIÓN DEL 26-11-2026
+======================================================================
+
+Sexta actualización:
+- Se revisó la bitácora en main y se comprobó que su encabezado y varias secciones todavía describían PR #4 como abierto y los cambios como pendientes.
+- Se verificó que PR #4 está fusionado en main; commit de referencia: 81f2fc1c7f9b87ac37c52c9d8687711685d30e35.
+- Se revisaron inventory/roll_manager, Character Builder, StatsManager, loader, LuckValue, estrellas y pruebas existentes.
+- Se documenta el diseño acordado de modificadores flat y percent, sus rangos por tier, cantidad por tier, Luck y bonus de estrellas.
+- Se confirma el valor inicial 1 para las diez estadísticas; el cambio de código sigue pendiente.
+- Se aclara que la generación y persistencia de modificadores aleatorios todavía no está implementada.
+- Se aclara que las pruebas existentes fueron añadidas, pero no se verificó su ejecución.
+- Se registran como propuestas pendientes las reglas de selección 50/50 y no repetición del mismo par (stat, kind).
+- Esta actualización es documental. No se modificó código de la aplicación ni se ejecutaron pruebas.
 
 FIN DE LA BITÁCORA
