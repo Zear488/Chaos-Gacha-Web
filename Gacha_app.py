@@ -8,7 +8,7 @@ from streamlit.components.v1 import html
 from logic import perform_gacha_draw, GachaHistoryTracker
 from logic.tracker import GachaHistoryTracker
 from logic.gacha_engine import perform_gacha_draw
-from logic.roll_manager import sync_roll_instances
+from logic.roll_manager import sync_roll_instances, clear_inventory
 import numpy as np
 import math
 import altair as alt
@@ -107,6 +107,7 @@ with st.sidebar.expander("📘 CSV Format Help"):
 if st.sidebar.button("🗑️ Clear History"):
     st.session_state["log"] = []
     tracker.clear_all()
+    clear_inventory()
 
 # Mostrar puntos actuales
 st.sidebar.markdown(f"⭐ Transcendent Points: `{tracker.get_points()}`")
