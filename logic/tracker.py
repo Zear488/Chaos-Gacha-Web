@@ -28,7 +28,18 @@ class GachaHistoryTracker:
     def __init__(self):
         os.makedirs(GACHA_LOG_DIR, exist_ok=True)
         self.repeats = self._load_json(REPEATS_FILE, default={})
-        self.points = self._load_points()
+        self.points_error = None
+        try:
+            self.points = self._load_points()
+        except ValueError as exc:
+            # Keep the application loadable, but never overwrite an unreadable
+            # points file through normal point mutations.
+            self.points = {"points": 0, "discard_transactions": {}}
+            self.points_error = str(exc)
+
+    def _ensure_points_available(self):
+        if self.points_error:
+            raise ValueError(self.points_error)
 
     def _load_json(self, path: str, default):
         try:
@@ -84,6 +95,8 @@ class GachaHistoryTracker:
     def check_repeat(self, pull: Dict) -> bool:
         key = f"{pull['Type']}::{pull['Element']}"
         if key in self.repeats:
+            self._ensure_points_available()
+            self.points = self._load_points()
             self.points["points"] += 1
             self._save_json(POINTS_FILE, self.points)
             return True
@@ -95,6 +108,8 @@ class GachaHistoryTracker:
         return float(self.points.get("points", 0))
 
     def spend_points(self, cost: int) -> bool:
+        self._ensure_points_available()
+        self.points = self._load_points()
         if self.points["points"] >= cost:
             self.points["points"] = round(float(self.points["points"]) - cost, 6)
             self._save_json(POINTS_FILE, self.points)
@@ -106,6 +121,7 @@ class GachaHistoryTracker:
 
         Returns True only when this call creates a new TP transaction.
         """
+        self._ensure_points_available()
         if not isinstance(roll_id, str) or not roll_id.strip():
             raise ValueError("Se requiere un ID de tirada válido.")
         if tier not in DISCARD_TP_BY_TIER:
@@ -126,11 +142,13 @@ class GachaHistoryTracker:
 
     def clear_all(self):
         self.repeats = {}
+        self.points_error = None
         self.points = {"points": 0, "discard_transactions": {}}
         self._save_json(REPEATS_FILE, self.repeats)
         self._save_json(POINTS_FILE, self.points)
 
     def load_from_log(self, log: List[Dict]):
+        self._ensure_points_available()
         self.repeats = {f"{entry['Type']}::{entry['Element']}": True for entry in log}
         self._save_json(REPEATS_FILE, self.repeats)
 
