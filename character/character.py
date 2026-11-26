@@ -1,6 +1,6 @@
 import os
 from .parser import parse_stats, parse_resistances, parse_generic_field
-from .loader import load_free_category, load_stats_base
+from .loader import load_stats_base
 from .validator import validate_json, validate_csv, validate_txt_block
 from .stats_manager import StatsManager
 from logic.roll_manager import get_equipped_rolls
