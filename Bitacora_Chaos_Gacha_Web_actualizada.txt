@@ -2,7 +2,7 @@ BITÁCORA MAESTRA — CHAOS GACHA WEB
 Proyecto: Zear488/Chaos-Gacha-Web
 Actualización: 26 de noviembre de 2026
 Estado de referencia del repositorio: rama fix/category-equipment-slots (cambios pendientes de revisión/merge)
-Commit de implementación inspeccionado: 1ce10d252983ced58419ae31afd9d9211cae633a
+Commit de implementación inspeccionado: bdf021832869f1bc20428e3c9f94d51bda54c99c
 Commit base: main / 956c6935838e52bc88ce59a474e4cce58a8fd278
 Commit anterior de referencia: 1eea5c6f02f937b34a12cb72130a95f8d8839429
 
@@ -445,7 +445,7 @@ Consolida el propósito narrativo del proyecto, las reglas de aleatoriedad, inst
 - La interfaz permite desequipar registros que ya estuvieran equipados aunque su Type no sea una categoría equipable actual.
 - Se ampliaron tests/test_roll_manager.py para probar límites independientes, crecimiento al nivel 10, independencia entre Ability y Skill y exclusión de Item.
 - Archivos modificados: logic/roll_manager.py, tests/test_roll_manager.py, Gacha_app.py, character/character.py y character/stats_manager.py; se añadió tests/test_character_equipment.py.
-- Commits de esta rama: 07946fa2a46f3e0ef1279c6c61795724463430e7 (lógica), c5925f73504a421b58af4ffda0b832c64da71fb7 (pruebas de inventario), 6d81b3fccda64946fc8d54cba0e563b8259c9c20 y 927624c97ef2e37e8d6d9e6abe933b8d45f257c2 (interfaz), 51d72fa700dc6652b327c5c13ec4ab3643ac60e6 y 483bec69ebed3002d86a6da9176cccfefe5a6e8e (Character Builder), 9d8299f80418e4d711cce277a28766b60c569a11 (integración de interfaz), 9800a5d5e13eeaaef5f98b5390139eb19ad9be42 (pruebas de Character Builder), e5ef00e0ab79d600d8b46e1ebb5e20af3ae428dd y 1ce10d252983ced58419ae31afd9d9211cae633a (preservación de Description y limpieza).
+- Commits de esta rama: 07946fa2a46f3e0ef1279c6c61795724463430e7 (lógica), c5925f73504a421b58af4ffda0b832c64da71fb7 (pruebas de inventario), 6d81b3fccda64946fc8d54cba0e563b8259c9c20 y 927624c97ef2e37e8d6d9e6abe933b8d45f257c2 (interfaz), 51d72fa700dc6652b327c5c13ec4ab3643ac60e6 y 483bec69ebed3002d86a6da9176cccfefe5a6e8e (Character Builder), 9d8299f80418e4d711cce277a28766b60c569a11 (integración de interfaz), 9800a5d5e13eeaaef5f98b5390139eb19ad9be42 (pruebas de Character Builder), e5ef00e0ab79d600d8b46e1ebb5e20af3ae428dd y 1ce10d252983ced58419ae31afd9d9211cae633a (preservación de Description y limpieza), 4a869d794ba5ec92722e0110e32add8429ca9d81 y bdf021832869f1bc20428e3c9f94d51bda54c99c (manejo de carga del inventario en Character Builder).
 - Character Builder ahora usa únicamente instancias equipadas para aplicar los efectos soportados en Description; se corrigió la comparación de nombres de estadísticas ignorando mayúsculas/minúsculas.
 - Se preservan marcadores # y saltos de línea al guardar Description desde el flujo de tiradas, para no eliminar los tags que interpreta el parser.
 - Se eliminó la definición duplicada de load_free_categories().
