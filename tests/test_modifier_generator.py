@@ -99,24 +99,23 @@ class ModifierGeneratorTests(unittest.TestCase):
     def test_legacy_inventory_instance_gets_modifiers_on_next_sync(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "inventory.json")
-            with open(path, "w", encoding="utf-8") as file:
-                json.dump({
-                    "version": 1,
-                    "rolls": [{
-                        "id": "legacy-id", "fingerprint": "old",
-                        "occurrence": 0, "status": "stored",
-                        "pull": {
-                            "Type": "Skill", "Element": "Old",
-                            "Tier": "Common", "LuckValue": 50,
-                        },
-                    }],
-                }, file)
-            sync_roll_instances([{
+            pull = {
                 "Type": "Skill", "Element": "Old",
                 "Tier": "Common", "LuckValue": 50,
-            }], path=path)
+            }
+            original = sync_roll_instances([pull], path=path)[0]
+            with open(path, "r", encoding="utf-8") as file:
+                data = json.load(file)
+            # Simulate an inventory created before modifier generation existed.
+            data["rolls"][0].pop("modifiers", None)
+            data["rolls"][0].pop("modifiers_generated", None)
+            data["rolls"][0].pop("modifier_generation_version", None)
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump(data, file)
+
+            sync_roll_instances([pull], path=path)
             saved = get_inventory(path)[0]
-            self.assertEqual(saved["id"], "legacy-id")
+            self.assertEqual(saved["id"], original["id"])
             self.assertTrue(saved["modifiers_generated"])
             self.assertEqual(len(saved["modifiers"]), 1)
 
