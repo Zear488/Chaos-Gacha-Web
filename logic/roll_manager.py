@@ -14,6 +14,8 @@ import uuid
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List
 
+from .tracker import DISCARD_TP_BY_TIER
+
 INVENTORY_FILE = os.path.join("gacha_log", "inventory.json")
 INVENTORY_VERSION = 1
 VALID_STATUSES = {"stored", "equipped", "discarded"}
@@ -284,20 +286,6 @@ def get_equipped_rolls(path: str = INVENTORY_FILE) -> List[Dict[str, Any]]:
         if roll.get("status", "stored") == "equipped"
     ]
 
-
-
-DISCARD_TP_BY_TIER = {
-    "Trash": 0.0,
-    "Common": 0.001,
-    "Uncommon": 0.003,
-    "Rare": 0.009,
-    "Elite": 0.025,
-    "Epic": 0.075,
-    "Legendary": 0.225,
-    "Mythical": 0.675,
-    "Divine": 2.025,
-    "Transcendent": 6.075,
-}
 
 
 def discard_roll(
