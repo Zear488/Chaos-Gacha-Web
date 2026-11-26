@@ -15,6 +15,7 @@ from collections import defaultdict
 from typing import Any, Dict, Iterable, List
 
 from .tracker import DISCARD_TP_BY_TIER
+from .modifier_generator import ensure_roll_modifiers
 
 INVENTORY_FILE = os.path.join("gacha_log", "inventory.json")
 INVENTORY_VERSION = 1
@@ -155,6 +156,10 @@ def sync_roll_instances(
             }
             data["rolls"].append(instance)
             previous[key] = instance
+            changed = True
+
+        # Generate once for eligible legacy/new instances and persist on the instance.
+        if ensure_roll_modifiers(instance):
             changed = True
 
         synchronized.append(instance)
