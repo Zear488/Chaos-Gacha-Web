@@ -342,14 +342,14 @@ IMPLEMENTADAS EN CÓDIGO:
 IMPLEMENTADAS PARCIALMENTE / NO CUMPLEN TODAVÍA EL DISEÑO COMPLETO:
 - Nivel: existe una entrada temporal, pero no una fuente persistente conectada al personaje.
 - La nueva implementación de límites por categoría está en una rama de trabajo pendiente de revisión/merge y aún requiere ejecutar pruebas.
-- Estados: discarded se acepta en la estructura, pero no existe el flujo de descarte.
-- Character Builder: sigue sin basar los cálculos en instancias equipadas.
+- Descarte: el flujo con ledger idempotente está implementado en la rama, pendiente de ejecutar pruebas.
+- Character Builder: ya basa los efectos descriptivos en instancias equipadas; falta integrar los modificadores aleatorios por ID y validar tags con datos reales.
 
 NO IMPLEMENTADAS:
 - Generación aleatoria de modificadores por ID.
 - Persistencia de modificadores aleatorios por instancia.
 - Fórmula y tabla de Luck para cantidad/calidad de estadísticas.
-- Activación de modificadores solo cuando una instancia está equipada.
+- Generación y activación de modificadores aleatorios persistidos por ID; actualmente solo se procesan las etiquetas descriptivas existentes en instancias equipadas.
 - Bonus de estrella aplicado a estadísticas y condicionado por equipamiento.
 - Validación automatizada y manual del descarte y de la acreditación de TP una sola vez por ID.
 - Integración completa del generador de modificadores aleatorios por ID con Character Builder.
@@ -462,6 +462,22 @@ Consolida el propósito narrativo del proyecto, las reglas de aleatoriedad, inst
 - Se eliminó la definición duplicada de load_free_categories().
 - Se añadieron pruebas de integración de Character Builder. Las pruebas fueron añadidas, pero no se ejecutaron en este entorno. Estado de ejecución: PENDIENTE.
 - La rama todavía no está fusionada con main.
-- Pull Request abierto como borrador: https://github.com/Zear488/Chaos-Gacha-Web/pull/4.
+- Pull Request abierto, sin fusionar con main: https://github.com/Zear488/Chaos-Gacha-Web/pull/4.
+
+
+26-11-2026 — Quinta actualización (descarte y Character Builder):
+- Se implementó discard_roll() para descartar una instancia individual por ID y otorgar el TP correspondiente al tier.
+- Los valores de descarte se centralizaron en logic/tracker.py y se reutilizan desde logic/roll_manager.py.
+- points.json ahora conserva un ledger discard_transactions por ID, evitando que una misma instancia otorgue TP más de una vez.
+- La recarga del historial CSV reconstruye los puntos de repetición y conserva los créditos de descarte del ledger.
+- La escritura de JSON del tracker es atómica. Si points.json está corrupto, el programa no lo sobrescribe silenciosamente; muestra un aviso y bloquea cambios de puntos.
+- La interfaz ofrece un checkbox de confirmación antes de descartar y muestra el TP otorgado.
+- Character Builder procesa descripciones solo desde instancias equipped; stored y discarded no aportan modificadores.
+- Se preservan los marcadores # y saltos de línea de Description en el flujo de tiradas para que el parser pueda reconocer tags.
+- StatsManager compara los nombres de estadísticas sin distinguir mayúsculas/minúsculas.
+- Se añadieron pruebas para el flujo de descarte, la idempotencia del TP, la persistencia tras recargar CSV y la protección de points.json corrupto.
+- Las pruebas automatizadas siguen sin ejecutarse; no afirmar que pasan.
+- No hay ejecuciones de GitHub Actions asociadas al último commit inspeccionado.
+- La rama fix/category-equipment-slots sigue abierta en el PR #4 y no está fusionada con main.
 
 FIN DE LA BITÁCORA
