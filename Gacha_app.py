@@ -1026,10 +1026,9 @@ if st.button("🧪 Generate Character From Gacha"):
     report = ValidationReport()
     char = Character()
 
-    char.load_gacha_possession("gacha_log/repeats.json", report)
-    char.load_gacha_csv("logs/gacha_history.csv", report)
+    char.load_equipped_rolls("gacha_log/inventory.json")
     char.load_free_categories("characterfiles", report)
-    
+
     data = char.build()
 
     st.subheader("📌 Final Stats")
