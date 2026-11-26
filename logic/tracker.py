@@ -74,7 +74,7 @@ class GachaHistoryTracker:
                 delete=False, suffix=".tmp"
             ) as file:
                 json.dump(data, file, indent=2, ensure_ascii=False)
-                file.write("\\n")
+                file.write("\n")
                 temp_path = file.name
             os.replace(temp_path, path)
         finally:
@@ -125,10 +125,11 @@ class GachaHistoryTracker:
         return True
 
     def clear_all(self):
-            self.repeats = {}
-            self.points = {"points": 0}
-            self._save_json(REPEATS_FILE, self.repeats)
-            self._save_json(POINTS_FILE, self.points)
+        self.repeats = {}
+        self.points = {"points": 0, "discard_transactions": {}}
+        self._save_json(REPEATS_FILE, self.repeats)
+        self._save_json(POINTS_FILE, self.points)
+
     def load_from_log(self, log: List[Dict]):
         self.repeats = {f"{entry['Type']}::{entry['Element']}": True for entry in log}
         self._save_json(REPEATS_FILE, self.repeats)
@@ -146,5 +147,14 @@ class GachaHistoryTracker:
             if match:
                 total_points -= int(match.group(1))
 
-        self.points = {"points": total_points}
+        transactions = self._load_points().get("discard_transactions", {})
+        discard_total = sum(
+            float(entry.get("amount", 0))
+            for entry in transactions.values()
+            if isinstance(entry, dict)
+        )
+        self.points = {
+            "points": round(total_points + discard_total, 6),
+            "discard_transactions": transactions,
+        }
         self._save_json(POINTS_FILE, self.points)
