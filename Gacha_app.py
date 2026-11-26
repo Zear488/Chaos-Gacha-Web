@@ -8,6 +8,7 @@ from streamlit.components.v1 import html
 from logic import perform_gacha_draw, GachaHistoryTracker
 from logic.tracker import GachaHistoryTracker
 from logic.gacha_engine import perform_gacha_draw
+from logic.roll_manager import sync_roll_instances
 import numpy as np
 import math
 import altair as alt
@@ -63,6 +64,7 @@ def load_csv_data(content: str):
 
             # Guardar en sesión
             st.session_state["log"] = df_loaded.to_dict(orient="records")
+            sync_roll_instances(st.session_state["log"])
 
             # ✅ Tracker debe cargarse DESPUÉS de limpiar
             tracker.load_from_log(st.session_state["log"])
@@ -461,6 +463,7 @@ if st.button("🎰 Roll", type="primary"):
                     new_entries.append(result)
         st.session_state["log"].extend(new_entries)
         tracker.load_from_log(st.session_state["log"])
+        sync_roll_instances(st.session_state["log"])
         df_auto = pd.DataFrame(st.session_state["log"])
         df_auto.to_csv("logs/gacha_history.csv", index=False, encoding="utf-8-sig")
         st.session_state["show_curve_analysis"] = False
@@ -483,6 +486,7 @@ if st.button("🎲 Multi-Roll"):
                     new_entries.append(result)
         st.session_state["log"].extend(new_entries)
         tracker.load_from_log(st.session_state["log"])
+        sync_roll_instances(st.session_state["log"])
         df_auto = pd.DataFrame(st.session_state["log"])
         df_auto.to_csv("logs/gacha_history.csv", index=False, encoding="utf-8-sig")
         st.session_state["show_curve_analysis"] = False
