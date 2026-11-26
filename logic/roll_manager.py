@@ -178,11 +178,35 @@ class InventoryStateError(ValueError):
     """Raised when an inventory state transition is not allowed."""
 
 
+EQUIPMENT_CATEGORIES = ("Ability", "Familiar", "Skill", "Trait")
+
+
 def get_equipment_slots(level: int) -> int:
-    """Return the number of equipment slots: 3 base, +1 per 10 levels."""
+    """Return the slot capacity PER CATEGORY: 3 base, +1 per 10 levels."""
     if isinstance(level, bool) or not isinstance(level, int) or level < 0:
         raise ValueError("El nivel debe ser un entero mayor o igual a 0.")
     return 3 + (level // 10)
+
+
+def _equipment_category(roll: Dict[str, Any]) -> str:
+    """Resolve a roll's equipable category without changing its stored Type."""
+    pull = roll.get("pull", {})
+    roll_type = pull.get("Type", "") if isinstance(pull, dict) else ""
+    for category in EQUIPMENT_CATEGORIES:
+        if str(roll_type).strip().casefold() == category.casefold():
+            return category
+    raise InventoryStateError(
+        f"La categoría '{roll_type}' no tiene espacios de equipamiento. "
+        f"Categorías equipables: {', '.join(EQUIPMENT_CATEGORIES)}."
+    )
+
+
+def _safe_equipment_category(roll: Dict[str, Any]) -> str:
+    """Return an empty category for legacy/non-equipable inventory entries."""
+    try:
+        return _equipment_category(roll)
+    except InventoryStateError:
+        return ""
 
 
 def equip_roll(
@@ -216,13 +240,16 @@ def equip_roll(
     if status == "equipped":
         raise InventoryStateError("Esta tirada ya está equipada.")
 
+    category = _equipment_category(target)
     equipped_count = sum(
         1 for roll in data["rolls"]
         if roll.get("status", "stored") == "equipped"
+        and _safe_equipment_category(roll) == category
     )
     if equipped_count >= slots:
         raise InventoryStateError(
-            f"No hay espacios disponibles: {equipped_count}/{slots} ocupados."
+            f"No hay espacios disponibles para {category}: "
+            f"{equipped_count}/{slots} ocupados."
         )
 
     target["status"] = "equipped"
