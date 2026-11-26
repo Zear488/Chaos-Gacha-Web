@@ -5,6 +5,14 @@ from .validator import validate_json, validate_csv, validate_txt_block
 from .stats_manager import StatsManager
 from logic.roll_manager import get_equipped_rolls
 
+
+def _has_star_bonus(pull):
+    """Recognize the existing star marker without counting Element + Notes twice."""
+    element = str(pull.get("Element", "")).lstrip()
+    notes = str(pull.get("Notes", ""))
+    return element.startswith("★") or "boosted star bonus" in notes.casefold()
+
+
 class Character:
     def __init__(self):
         self.possession = {}
@@ -27,16 +35,12 @@ class Character:
         self.possession = validate_json(path, report, dict, default)
 
     def load_gacha_csv(self, path="logs/gacha_history.csv", report=None):
-        """
-        Carga el historial de tiradas con todos los detalles.
-        """
+        """Carga el historial de tiradas con todos los detalles."""
         self.csv_rows = validate_csv(path, report)
 
     def load_stats(self, report=None):
-
         base = load_stats_base()
         self.stats = StatsManager(base)
-
 
     # ---------------------
     # PROCESSORS
@@ -47,42 +51,46 @@ class Character:
 
     def apply_gacha_items(self):
         """
-        Apply supported Description tags from equipped individual instances.
-        Stored and discarded rolls never contribute to the character.
+        Apply supported descriptive tags and persisted random modifiers from
+        equipped instances only. Stored and discarded rolls never contribute.
         """
         if self.equipped_rolls is None:
             self.load_equipped_rolls()
 
+        star_count = 0
         for instance in self.equipped_rolls:
             pull = instance.get("pull", {})
             if not isinstance(pull, dict):
                 continue
 
+            if _has_star_bonus(pull):
+                star_count += 1
+
+            modifiers = instance.get("modifiers", [])
+            if modifiers:
+                self.stats.add_random_modifiers(modifiers)
+
             desc = str(pull.get("Description", ""))
             for line in desc.splitlines():
                 if "#STATS" in line:
                     self.stats.add_stats(parse_stats(line))
-
                 elif "#RESISTANCES" in line:
                     res = parse_resistances(line)
                     for key, value in res.items():
                         self.resistances[key] = self.resistances.get(key, 0) + value
-
                 else:
                     tag, value = parse_generic_field(line)
                     if tag:
                         self.other_fields.setdefault(tag, []).append(value)
 
+        self.stats.set_star_count(star_count)
 
     def load_free_categories(self, folder="characterfiles", report=None):
         for name in ["race", "class", "lineage", "talent", "element",
-                 "factions", "reputations", "resistances",
-                 "equipment_custom"]:
+                     "factions", "reputations", "resistances",
+                     "equipment_custom"]:
             fpath = os.path.join(folder, f"{name}.txt")
             self.free_categories[name] = validate_txt_block(fpath, report)
-
-
-
 
     # ---------------------
     # FINAL BUILD
