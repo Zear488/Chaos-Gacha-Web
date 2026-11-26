@@ -24,12 +24,29 @@ class InventoryDataError(ValueError):
 
 
 def _fingerprint(pull: Dict[str, Any]) -> str:
+    # CSV import may turn values such as "3.50" into 3.5 and
+    # "50.00%" into 50.0. Normalize these fields so IDs survive reloads.
+    normalized = {}
+    for key, value in pull.items():
+        if value is None or str(value).strip().lower() in {"nan", "none"}:
+            normalized[key] = ""
+            continue
+
+        if key in {"Rarity", "Luck", "LuckValue"}:
+            numeric_text = str(value).strip().replace("%", "")
+            try:
+                normalized[key] = f"{float(numeric_text):.2f}"
+                continue
+            except (TypeError, ValueError):
+                pass
+
+        normalized[key] = str(value).strip()
+
     payload = json.dumps(
-        pull,
+        normalized,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
-        default=str,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
