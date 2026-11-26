@@ -89,7 +89,8 @@ class Character:
     # ---------------------
     def build(self):
         self.load_stats()
-        self.load_equipped_rolls()
+        if self.equipped_rolls is None:
+            self.load_equipped_rolls()
         self.apply_gacha_items()
         self.load_free_categories()
         final_stats = self.stats.finalize()
