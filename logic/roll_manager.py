@@ -142,7 +142,8 @@ def sync_roll_instances(
 
         saved = previous.get(key)
         if saved:
-            instance = dict(saved)
+            # Mutate the inventory-owned record so newly generated fields persist.
+            instance = saved
             if instance.get("pull") != pull:
                 instance["pull"] = pull
                 changed = True
