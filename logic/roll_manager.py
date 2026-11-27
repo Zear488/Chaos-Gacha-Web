@@ -134,22 +134,42 @@ def sync_roll_instances(
         if not isinstance(row, dict):
             continue
 
-        pull = dict(row)
+        row_data = dict(row)
+        imported_id = str(row_data.pop("_roll_id", "") or "").strip()
+        imported_status = row_data.pop("_roll_status", None)
+        imported_modifiers = row_data.pop("_roll_modifiers", None)
+        imported_generated = row_data.pop("_roll_modifiers_generated", None)
+        imported_version = row_data.pop("_roll_modifier_generation_version", None)
+        pull = row_data
         fingerprint = _fingerprint(pull)
         occurrence = occurrences[fingerprint]
         occurrences[fingerprint] += 1
         key = (fingerprint, occurrence)
 
-        saved = previous.get(key)
+        saved = next(
+            (item for item in data["rolls"] if imported_id and item.get("id") == imported_id),
+            None,
+        ) if imported_id else None
+        if saved is None:
+            saved = previous.get(key)
         if saved:
             # Mutate the inventory-owned record so newly generated fields persist.
             instance = saved
             if instance.get("pull") != pull:
                 instance["pull"] = pull
                 changed = True
+            if imported_id and instance.get("id") != imported_id:
+                instance["id"] = imported_id
+                changed = True
+            if instance.get("fingerprint") != fingerprint:
+                instance["fingerprint"] = fingerprint
+                changed = True
+            if int(instance.get("occurrence", 0)) != occurrence:
+                instance["occurrence"] = occurrence
+                changed = True
         else:
             instance = {
-                "id": uuid.uuid4().hex,
+                "id": imported_id or uuid.uuid4().hex,
                 "fingerprint": fingerprint,
                 "occurrence": occurrence,
                 "status": "stored",
@@ -158,6 +178,20 @@ def sync_roll_instances(
             data["rolls"].append(instance)
             previous[key] = instance
             changed = True
+
+        if imported_status in VALID_STATUSES and instance.get("status") != imported_status:
+            instance["status"] = imported_status
+            changed = True
+        if imported_modifiers is not None:
+            if instance.get("modifiers") != imported_modifiers:
+                instance["modifiers"] = imported_modifiers
+                changed = True
+            if instance.get("modifiers_generated") != bool(imported_generated):
+                instance["modifiers_generated"] = bool(imported_generated)
+                changed = True
+            if imported_version is not None and instance.get("modifier_generation_version") != imported_version:
+                instance["modifier_generation_version"] = imported_version
+                changed = True
 
         # Generate once for eligible legacy/new instances and persist on the instance.
         if ensure_roll_modifiers(instance):
