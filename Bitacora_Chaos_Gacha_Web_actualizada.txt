@@ -1765,4 +1765,70 @@ CAMBIOS REALIZADOS EN LA RAMA fix/equipment-ui-and-character-builder-layout
 VALIDACIÓN
 - Se creó una rama desde main y se actualizó Gacha_app.py.
 - No se ejecutaron pruebas automatizadas ni una prueba manual de Streamlit en navegador en esta etapa.
-- No fusionar la rama sin autorización explícita del usuario.
+- Esta rama fue integrada en main mediante PR #18 el 27-11-2026. La integración no implica que el error DOM esté confirmado como resuelto; requiere prueba manual.
+
+
+======================================================================
+26. ESTABILIDAD DEL RENDERIZADO Y RESUMEN DE EQUIPAMIENTO (27-11-2026)
+======================================================================
+
+MOTIVO
+- El usuario aclaró que NotFoundError: Failed to execute 'removeChild' on 'Node'
+  aparece al ejecutar un Roll o Multi-Roll, en un contexto donde los espacios
+  y bloques de la interfaz Equipment parecen no actualizarse correctamente.
+- Esto orienta la investigación hacia el ciclo de rerenderizado de Streamlit/
+  React tras generar resultados, no únicamente hacia el selector de Equipment.
+
+26.1 Cambios de renderizado
+- Se centralizó la ejecución de Roll y Multi-Roll en execute_pull_batch().
+- Los resultados del último lote se guardan en st.session_state["latest_pull_results"].
+- La presentación de resultados se realiza en un contenedor estable, en una
+  posición fija del árbol de la página, en lugar de crear un contenedor
+  transitorio dentro de cada callback de botón.
+- La carga explícita de CSV y Clear History limpian el bloque de últimos
+  resultados para evitar mostrar resultados de otra sesión/historial.
+- Se garantiza la creación de logs/ antes de exportar el historial CSV.
+- Objetivo: reducir cambios bruscos del subárbol de resultados entre reruns.
+  Esto es una medida dirigida a la causa probable, no una confirmación de que
+  el NotFoundError quedó resuelto.
+
+26.2 Equipment: resumen de instancias equipadas
+- Se añadió el expander "Currently Equipped" después de los contadores de
+  espacios por categoría.
+- Muestra categoría, nombre, tier, modificadores normales persistidos e ID
+  abreviado de cada instancia actualmente equipada.
+- Si no hay instancias equipadas, se muestra un estado vacío explícito.
+- El resumen es de solo lectura; no cambia estados ni límites de equipamiento.
+
+26.3 Estadísticas especiales
+- Continúan NO IMPLEMENTADAS.
+- El generador normal de modificadores permanece separado y sin cambios.
+- El diseño futuro sigue requiriendo una estructura especial independiente,
+  sin consumir slots normales, guardada por ID en la misma instancia y
+  serializada en columnas CSV separadas.
+- Destinos iniciales: Resistances, Critical Chance y Critical Damage, con
+  extensión futura a Additional Fields configurables.
+- Pendiente definir rangos, probabilidades, esquema exacto, acumulación y
+  presentación antes de implementar.
+
+26.4 Pendientes generales recuperados de la bitácora
+- Ejecutar la suite automatizada completa; las entradas históricas indican
+  pruebas añadidas, pero no se debe asumir que fueron ejecutadas.
+- Validar manualmente Roll y Multi-Roll (1, 2, 5 y 10 resultados), confirmando
+  que el historial, IDs, inventario, modificadores, contadores y espacios
+  se actualizan correctamente y que no reaparece removeChild.
+- Validar el resumen Currently Equipped al equipar/desequipar y tras recargar.
+- Validar importación/exportación CSV y restauración ZIP con datos reales.
+- Revisar los tags descriptivos #STATS y #RESISTANCES con ejemplos reales.
+- Resolver discrepancias antiguas de la bitácora sobre el bonus de estrella
+  y confirmar que el código y la especificación vigente coincidan.
+- Diseñar e implementar los modificadores especiales como una etapa separada.
+- Revisar que el nivel mostrado por Equipment use la progresión persistente
+  actual y no reintroducir una entrada temporal independiente.
+
+26.5 Estado Git
+- Rama de trabajo: fix/pull-render-equipment-overview.
+- Base: main en el commit de integración del PR #18.
+- Cambios de esta etapa: Gacha_app.py y Bitacora_Chaos_Gacha_Web_actualizada.txt.
+- No se han ejecutado tests ni una sesión de navegador en esta etapa.
+- No fusionar esta rama sin autorización explícita del usuario.
