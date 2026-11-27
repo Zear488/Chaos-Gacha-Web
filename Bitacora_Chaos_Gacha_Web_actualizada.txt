@@ -1344,7 +1344,7 @@ Continuar en este orden:
 ======================================================================
 
 Fecha: 26-11-2026.
-Rama de trabajo: fix/tp-spending-and-clear-history.
+Rama de trabajo: feature/inventory-modifier-inspection.
 Alcance: mostrar los atributos de una instancia sin equiparla.
 
 20.1 Implementación añadida
