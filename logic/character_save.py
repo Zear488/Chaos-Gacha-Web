@@ -107,6 +107,8 @@ def create_character_save(history_rows, inventory_instances, base_dir: str = "."
     result = output.getvalue()
     if len(result) > MAX_ARCHIVE_BYTES:
         raise ValueError("Character save package exceeds the 50 MB limit.")
+    # Refuse to offer a package that the restore path itself would reject.
+    _decode_and_validate(result)
     return result
 
 
