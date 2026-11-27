@@ -15,6 +15,11 @@ from logic.roll_manager import (
 )
 from logic.history_csv import parse_history_csv, strip_import_metadata, serialize_history_csv
 from character.parser import parse_stats, parse_resistances
+from character.progression import (
+    STAT_NAMES, get_level_from_pulls, get_progress_to_next_level,
+    points_earned_for_level, load_character_progress, allocate_stat_points,
+    clear_character_progress,
+)
 import numpy as np
 import math
 import altair as alt
@@ -92,6 +97,7 @@ if st.sidebar.button("🗑️ Clear History"):
     st.session_state["rendering_log"] = False
     tracker.clear_all()
     clear_inventory()
+    clear_character_progress()
 
     # Remove the persisted raw gacha history as well as the JSON state.
     history_path = os.path.join("logs", "gacha_history.csv")
@@ -927,15 +933,15 @@ if st.session_state["show_individual_inventory_toggle"]:
                 "Equip and unequip individual copies by ID. Only equipped "
                 "instances are intended to affect character statistics."
             )
-            character_level = st.number_input(
-                "Character level for slot calculation "
-                "(temporary input; no saved level source is connected yet)",
-                min_value=1,
-                value=1,
-                step=1,
-                key="inventory_character_level",
+            # Level is derived from unique history rows; repeated pulls
+            # count because each row represents a separate narrative event.
+            character_pull_count = len(st.session_state.get("log", []))
+            character_level = get_level_from_pulls(character_pull_count)
+            slot_limit = get_equipment_slots(character_level)
+            st.caption(
+                f"Character level: {character_level} · "
+                f"Pulls recorded: {character_pull_count}"
             )
-            slot_limit = get_equipment_slots(int(character_level))
             st.caption("Equipment limits are independent for each category.")
             slot_columns = st.columns(len(EQUIPMENT_CATEGORIES))
             for column, category in zip(slot_columns, EQUIPMENT_CATEGORIES):
@@ -1148,6 +1154,89 @@ from character.validator import ValidationReport
 st.markdown("---")
 st.header("🧬 Character Builder Integration")
 
+# Narrative level and stat-point allocation. Character attributes are never
+# used by the gacha engine; only the pull history determines level.
+character_pull_count = len(st.session_state.get("log", []))
+level_progress = get_progress_to_next_level(character_pull_count)
+character_level = level_progress["level"]
+earned_stat_points = points_earned_for_level(character_level)
+
+st.subheader("📈 Narrative Character Progression")
+st.write(
+    f"**Level {character_level}** · "
+    f"{character_pull_count} documented pull(s)"
+)
+st.progress(
+    level_progress["pulls_into_level"] / max(1, level_progress["pulls_for_this_level"])
+)
+st.caption(
+    f"{level_progress['pulls_into_level']} / "
+    f"{level_progress['pulls_for_this_level']} pulls toward level "
+    f"{character_level + 1}. "
+    f"Next level reward: +{character_level + 1} stat points."
+)
+
+try:
+    progression_data = load_character_progress()
+    allocated_total = sum(progression_data["allocated"].values())
+    available_stat_points = earned_stat_points - allocated_total
+    if available_stat_points < 0:
+        st.warning(
+            f"Your saved allocations exceed the points currently earned by "
+            f"{abs(available_stat_points)}. They have been preserved; no "
+            "additional points can be allocated until the history supports them."
+        )
+        available_stat_points = 0
+
+    point_col1, point_col2 = st.columns(2)
+    point_col1.metric("Stat points earned", earned_stat_points)
+    point_col2.metric("Available to allocate", available_stat_points)
+
+    with st.expander("🧮 Allocate character stat points", expanded=available_stat_points > 0):
+        allocation_stat = st.selectbox(
+            "Choose a stat",
+            options=list(STAT_NAMES),
+            key="progression_stat_choice",
+        )
+        allocation_amount = st.number_input(
+            "Points to allocate",
+            min_value=1,
+            max_value=max(1, available_stat_points),
+            value=1,
+            step=1,
+            disabled=available_stat_points <= 0,
+            key="progression_stat_amount",
+        )
+        if st.button(
+            "Save stat allocation",
+            disabled=available_stat_points <= 0,
+            key="save_progression_allocation",
+        ):
+            try:
+                allocate_stat_points(
+                    allocation_stat,
+                    int(allocation_amount),
+                    character_pull_count,
+                )
+                st.success(
+                    f"Allocated {allocation_amount} point(s) to {allocation_stat}."
+                )
+                st.rerun()
+            except ValueError as error:
+                st.error(str(error))
+
+    st.caption("Current level-up allocations")
+    st.dataframe(
+        pd.DataFrame([
+            {"Stat": stat, "Allocated": value}
+            for stat, value in progression_data["allocated"].items()
+        ]),
+        use_container_width=True,
+        hide_index=True,
+    )
+except ValueError as error:
+    st.error(f"Character progression could not be loaded: {error}")
+
 if st.button("🧪 Generate Character From Gacha"):
     report = ValidationReport()
     char = Character()
@@ -1156,8 +1245,8 @@ if st.button("🧪 Generate Character From Gacha"):
 
     try:
         data = char.build()
-    except InventoryDataError as error:
-        st.error(f"Unable to load equipped inventory: {error}")
+    except (InventoryDataError, ValueError) as error:
+        st.error(f"Unable to build character data: {error}")
     else:
         st.subheader("📌 Final Stats")
         st.json(data["stats"])
