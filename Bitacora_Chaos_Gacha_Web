@@ -1,0 +1,1490 @@
+BITÁCORA MAESTRA — CHAOS GACHA WEB
+Proyecto: Zear488/Chaos-Gacha-Web
+Actualización: 26 de noviembre de 2026
+Estado de referencia del repositorio: main, commit de fusión 81f2fc1c7f9b87ac37c52c9d8687711685d30e35
+PR #4 (equipamiento por categoría, Character Builder y descarte/TP): FUSIONADO en main.
+Rama de documentación de esta actualización: docs/update-bitacora-modifier-design.
+La sección 11 contiene la fotografía vigente del repositorio y las decisiones de modificadores; las secciones anteriores conservan el registro histórico y quedan subordinadas a esa actualización cuando exista contradicción.
+Commit anterior de referencia histórica: 1eea5c6f02f937b34a12cb72130a95f8d8839429
+
+PROPÓSITO DE ESTA BITÁCORA
+Conservar las decisiones, el orden de trabajo y el estado real de implementación para retomar el proyecto en futuras sesiones.
+
+INSTRUCCIÓN PARA FUTURAS SESIONES
+Antes de modificar el repositorio, leer esta bitácora y revisar el estado actual de GitHub. Esta bitácora expresa el diseño acordado, pero no demuestra que una función ya esté implementada. Actualizar las secciones de estado después de inspeccionar o modificar código. No rehacer funciones que ya existan y no cambiar nombres, categorías, rarezas ni partes ajenas al objetivo sin una necesidad demostrable.
+
+======================================================================
+1. PROPÓSITO Y LÍMITES DEL PROYECTO
+======================================================================
+
+Chaos Gacha Web no es un videojuego completo. Es una herramienta para introducir aleatoriedad auténtica en personajes, habilidades, objetos y otros elementos utilizados para escribir novelas web. La herramienta genera posibilidades; el escritor decide qué significan dentro de su historia.
+
+Límites:
+- No añadir mecánicas de videojuego que no sean necesarias para este propósito.
+- No añadir combates, misiones, enemigos, habilidades activables, economía compleja ni progresión jugable.
+- No decidir qué combinación es narrativamente correcta o qué estadística es mejor para una habilidad.
+- Priorizar resultados aleatorios variados, persistentes y comparables para que el usuario pueda elegir.
+- Mantener intacto el funcionamiento actual del gacha siempre que no sea imprescindible cambiarlo.
+
+======================================================================
+2. DECISIONES GENERALES CONFIRMADAS
+======================================================================
+
+Configuración elegida para Chaos Gacha Web:
+- Autenticación: NONE. No habrá registro, inicio de sesión, contraseñas, OAuth ni cuentas de usuario.
+- Almacenamiento: LOCAL. Los datos se guardarán en archivos locales de la instalación.
+- Usuarios: SINGLE. La aplicación está pensada para un solo usuario y un único conjunto de datos.
+
+Consecuencias:
+- No crear módulos de autenticación, gestión de cuentas, roles o separación de datos por usuario.
+- La aplicación debe abrir directamente su interfaz sin pedir iniciar sesión.
+- La persistencia debe realizarse localmente, manteniendo los archivos y formatos existentes cuando sea posible.
+- No introducir una base de datos en la nube ni servicios externos de identidad.
+- La decisión de almacenamiento local implica que, si la aplicación se ejecuta alojada en un servicio remoto, los archivos se guardarán en el entorno del servidor y no automáticamente en la computadora del usuario. Para que los datos sean realmente locales y privados en la computadora del usuario, la ejecución debe ser local.
+- No implementar sincronización entre dispositivos salvo que se acuerde posteriormente.
+
+======================================================================
+3. REGLAS QUE NO DEBEN ROMPERSE
+======================================================================
+
+1. Conservar nombres y categorías existentes: Ability, Familiar, Skill, Trait e Item, así como los nombres de rarezas y tiers que ya use el repositorio.
+2. No alterar innecesariamente el gacha. Reutilizar los datos que ya produce y registra.
+3. Cada tirada es una instancia independiente. Dos tiradas de la misma habilidad pueden tener estadísticas, valores y combinaciones diferentes.
+4. Persistencia: una vez generadas las estadísticas de una tirada, no se vuelven a sortear al recargar la aplicación.
+5. El inventario no equivale a equipamiento. Tener una tirada guardada no activa sus estadísticas.
+6. Solo las instancias equipadas aportan estadísticas.
+7. El descarte entrega TP según el tier existente. Una misma instancia no puede entregar TP más de una vez.
+8. Item queda fuera de la generación de modificadores estadísticos en esta etapa.
+9. characterfiles es descriptivo: contiene información que escribe el usuario y no participa en los cálculos aleatorios.
+
+======================================================================
+4. DISEÑO FUNCIONAL ACORDADO
+======================================================================
+
+4.1 Tiradas e identificadores
+
+- Cada resultado individual del gacha debe tener un ID aleatorio único y persistente.
+- Las repeticiones de una misma categoría y nombre son instancias distintas.
+- El ID no debe regenerarse al abrir la aplicación.
+- El sistema debe reconciliar registros existentes sin perder tiradas repetidas ni alterar el historial original.
+- No usar repeats.json como única fuente de instancias: representa posesión/repetición por clave y no distingue cada tirada individual.
+
+Archivos:
+- gacha_log/inventory.json: IMPLEMENTADO como archivo de persistencia de instancias e IDs, con su estado y datos de la tirada.
+- gacha_log/roll_ids.json: propuesta anterior; no crear si inventory.json continúa cubriendo correctamente la identidad individual.
+- gacha_log/roll_stats.json: propuesto para los futuros modificadores aleatorios; todavía no implementado.
+
+Los nombres son una propuesta de organización, no una orden para duplicar archivos o estructuras si el repositorio ya tiene una solución equivalente. Inspeccionar antes de crear.
+
+4.2 Generación aleatoria de estadísticas
+
+Las categorías que reciben modificadores son Ability, Familiar, Skill y Trait. Item no recibe modificadores estadísticos en esta etapa.
+
+- La rareza/tier determina los límites de cuántas estadísticas pueden aparecer y los rangos de valores permitidos.
+- La suerte influye en las probabilidades de obtener mejores valores y puede influir también en la posibilidad de obtener más estadísticas, según la fórmula que se defina.
+- La aleatoriedad decide qué estadísticas concretas aparecen y qué valores reciben.
+- La misma habilidad no tiene estadísticas fijas ni una combinación predeterminada.
+- No introducir afinidades obligatorias entre el nombre de una habilidad y una estadística.
+- No elegir automáticamente la combinación supuestamente más útil.
+
+Estadísticas base observadas en el código inspeccionado:
+STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa, Ataque.
+
+No cambiar esos nombres ni añadir otras estadísticas sin revisar primero el esquema actual y acordarlo.
+
+ESTADO: pendiente de implementación. La especificación de tiers, cantidad de espacios, magnitudes y Luck fue acordada después de esta fotografía histórica y queda documentada en la sección 11. No existe todavía un generador de modificadores aleatorios persistidos por ID.
+
+4.3 Bonus de estrella
+
+- El log puede indicar una tirada con estrella mediante el prefijo ★ en Element; también se debe revisar Notes para los registros de bonus.
+- El bonus acordado conceptualmente es un aumento global del 10% por cada instancia con bonus de estrella.
+- Evitar contar dos veces la misma estrella si aparece tanto en Element como en Notes.
+- Como las estadísticas solo se activan al equipar una instancia, el bonus de estrella de esa instancia debe seguir el estado de equipamiento: equipada = activo; guardada/desequipada = inactivo; descartada = inactivo.
+- DECISIÓN CONFIRMADA: el bonus es lineal, +10% por instancia equipada con ★, con un máximo de +40% (cuatro estrellas contabilizadas).
+- El bonus multiplica únicamente la contribución de los modificadores aleatorios; no aumenta directamente la estadística base.
+- La fórmula y el ejemplo numérico vigentes se documentan en la sección 11.
+
+ESTADO: diseño acordado, todavía no implementado ni conectado al equipamiento.
+
+4.4 Inventario, equipamiento y límites
+
+Estados acordados:
+- Guardada: está en el inventario, no aporta estadísticas.
+- Equipada: está en el inventario y sus modificadores están activos.
+- Descartada: ya no está disponible, no aporta estadísticas y no puede volver a generar TP.
+
+Límites independientes por categoría:
+
+Nivel del personaje | Ability | Familiar | Skill | Trait
+1–9               | 3       | 3       | 3    | 3
+10–19             | 4       | 4       | 4    | 4
+20–29             | 5       | 5       | 5    | 5
+30–39             | 6       | 6       | 6    | 6
+40–49             | 7       | 7       | 7    | 7
+
+Regla general: 3 espacios iniciales por categoría y +1 espacio por cada 10 niveles del personaje.
+
+- Los cuatro tipos no comparten un único límite.
+- La posesión de una tirada no la equipa automáticamente.
+- El usuario elige qué instancias equipar y puede cambiar su selección.
+- Solo las instancias equipadas contribuyen a las estadísticas y al bonus de estrella.
+- El nivel es el nivel del personaje. Su fuente y forma de almacenamiento deben verificarse y definirse; no inventar un sistema de experiencia.
+
+ESTADO ACTUAL DEL CÓDIGO:
+- Existe un inventario persistente por instancia en logic/roll_manager.py y la ruta de datos gacha_log/inventory.json.
+- Los estados stored, equipped y discarded están contemplados en la validación del archivo.
+- Existen funciones para equipar y desequipar por ID, consultar inventario y obtener instancias equipadas.
+- La interfaz de Gacha_app.py permite ver instancias y equipar/desequipar una selección.
+- get_equipment_slots(level) calcula 3 + (level // 10).
+- La interfaz pide el nivel mediante un number_input temporal; no está conectado a un nivel persistente del personaje.
+- ACTUALIZADO EN LA RAMA fix/category-equipment-slots: equip_roll() ahora cuenta las instancias equipadas por Type y aplica un límite independiente para Ability, Familiar, Skill y Trait. Cada categoría conserva 3 + (nivel // 10) espacios.
+- Item y cualquier Type no incluido en las cuatro categorías no se pueden equipar; permanecen guardados. La función unequip_roll() sigue permitiendo desequipar una instancia ya equipada, incluso si es un registro heredado de categoría no equipable.
+- La interfaz muestra contadores separados por categoría y evita ofrecer equipamiento para Item.
+- El flujo de descarte para el usuario está implementado en la versión fusionada: confirmación, cambio a discarded y acreditación TP idempotente por ID.
+
+Los límites separados por categoría y el flujo de descarte/TP están fusionados en main. Se añadieron pruebas, pero no se debe afirmar que pasan sin ejecutar la suite. El nivel continúa siendo una entrada temporal y no está conectado a una fuente persistente del personaje.
+
+4.5 Descarte y Trash Points (TP)
+
+El descarte permite recuperar TP según el tier, reutilizando los valores existentes en el sistema de repetidos. La tabla está implementada como DISCARD_TP_BY_TIER en logic/tracker.py:
+
+Tier         | TP
+Trash        | 0
+Common       | 0.001
+Uncommon     | 0.003
+Rare         | 0.009
+Elite        | 0.025
+Epic         | 0.075
+Legendary    | 0.225
+Mythical     | 0.675
+Divine       | 2.025
+Transcendent | 6.075
+
+- El descarte entrega TP una sola vez por ID.
+- Al descartar una instancia equipada, primero deja de aportar sus modificadores y su bonus de estrella.
+- Después se registra como descartada y se acredita el TP correspondiente.
+- El estado de descarte debe persistir tras reiniciar la aplicación.
+- Mantener un registro de descartes es recomendable para auditoría y prevención de duplicaciones.
+- No convertir descartes en materiales ni crear otra moneda: la recompensa acordada es TP.
+
+ESTADO ACTUAL EN LA RAMA fix/category-equipment-slots:
+- Existe discard_roll() en logic/roll_manager.py.
+- La interfaz requiere confirmación explícita antes del descarte.
+- El tier determina el valor acreditado según la tabla de esta sección.
+- logic/tracker.py guarda discard_transactions en points.json, indexadas por ID de tirada, para evitar doble acreditación.
+- La transacción de TP se registra antes de cambiar el estado de inventario. Si la escritura del inventario falla, el usuario puede reintentar; el ledger evita volver a acreditar TP y permite completar el cambio de estado.
+- Las instancias descartadas dejan de aparecer en get_equipped_rolls(), por lo que dejan de aportar efectos al Character Builder.
+- load_from_log() conserva el ledger y suma sus importes al reconstruir los puntos desde el CSV; así, volver a cargar el historial no elimina los TP obtenidos por descarte.
+- clear_all() limpia también el ledger cuando el usuario borra explícitamente todo el historial.
+- El archivo points.json se escribe mediante reemplazo atómico. Si el archivo está corrupto, se preserva y se bloquean las operaciones que modificarían puntos; la interfaz muestra un aviso.
+- Se añadieron tests/test_discard_transactions.py, pero no se ejecutaron en esta sesión. La implementación queda pendiente de validación automatizada y pruebas manuales.
+
+======================================================================
+5. SEPARACIÓN DE RESPONSABILIDADES Y ORGANIZACIÓN
+======================================================================
+
+La organización siguiente es conceptual. Antes de crear o mover archivos, comprobar la estructura real y reutilizar módulos existentes cuando sea razonable.
+
+Estructura actual relevante:
+Gacha_app.py
+logic/
+    __init__.py
+    gacha_engine.py
+    tracker.py
+    utils.py
+    roll_manager.py
+character/
+    character.py
+    loader.py
+    stats_manager.py
+    parser.py
+    validator.py
+gacha_log/
+    points.json
+    repeats.json
+    inventory.json (archivo de datos creado/gestionado en tiempo de ejecución)
+logs/
+    gacha_history.csv
+tests/
+    test_roll_manager.py
+
+Estructura conceptual para lo pendiente:
+gacha_log/
+    points.json
+    repeats.json
+    inventory.json
+    roll_stats.json (propuesto; pendiente de implementar)
+
+character/
+    character.py
+    loader.py
+    stats_manager.py
+    parser.py
+    validator.py
+    roll_manager.py          (solo si no existe una responsabilidad equivalente)
+    equipment_manager.py     (solo si no existe una responsabilidad equivalente)
+
+characterfiles/
+    stats.json
+    archivos descriptivos editables por el usuario
+
+Responsabilidades:
+- Roll/ID manager: asignar y persistir IDs individuales, reconciliando el historial sin duplicar.
+- Roll stats manager: generar una sola vez los modificadores según tier/rareza y suerte, y guardarlos por ID.
+- Equipment manager: guardar qué IDs están equipados, validar límites por categoría y nivel, y determinar qué modificadores están activos.
+- Stats manager: calcular estadísticas usando la base más los modificadores de instancias equipadas y el bonus de estrella activo.
+- Discard/TP handling: procesar el descarte de forma protegida contra doble acreditación.
+- Characterfiles: cargar y mostrar información narrativa/descriptiva, sin modificar cálculos.
+
+No crear módulos duplicados si las responsabilidades pueden incorporarse limpiamente en los actuales.
+
+======================================================================
+6. ESTADO DEL TRABAJO Y ANÁLISIS DEL REPOSITORIO
+======================================================================
+
+Referencia de inspección: repositorio Zear488/Chaos-Gacha-Web, rama main, commit 1bacfc6ba1fe3214a15a120ffe65f9a684aab066.
+La comparación con el commit anterior de la bitácora (1eea5c6f02f937b34a12cb72130a95f8d8839429) muestra 15 commits de avance y cambios acumulados en tres archivos: Gacha_app.py, logic/roll_manager.py y tests/test_roll_manager.py.
+Esta referencia es una fotografía de la inspección realizada el 26-11-2026. Comprobar rama y estado actuales antes de cualquier modificación.
+
+6.1 Elementos existentes comprobados en el repositorio
+
+- Existe Gacha_app.py como aplicación principal Streamlit.
+- Existe logic/ con __init__.py, gacha_engine.py, tracker.py, utils.py y roll_manager.py.
+- Existe character/ con character.py, loader.py, stats_manager.py, parser.py y validator.py.
+- Existe carga de posesión desde gacha_log/repeats.json.
+- Existe lectura del historial CSV logs/gacha_history.csv para integrar resultados del gacha.
+- Existe carga de datos descriptivos desde characterfiles.
+- Existe un conjunto de estadísticas base: STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa y Ataque.
+- El gacha registra campos como Type, Element, Rarity, Tier, LuckValue, Luck, Description, Color y Notes.
+- El resultado con estrella puede reconocerse por Element con prefijo ★; Notes también debe revisarse.
+- Existen tiers y valores de TP para el sistema de repetidos.
+- requirements.txt contiene las dependencias de la aplicación; no se identificó una dependencia de autenticación.
+- La aplicación utiliza st.session_state para estado de interfaz, pero esto no es un sistema de autenticación ni almacenamiento permanente de inventario.
+
+6.2 Hallazgos y observaciones de código vigentes
+
+A. Motor del gacha y duplicación:
+- Gacha_app.py importa perform_gacha_draw desde logic y también desde logic.gacha_engine.
+- Además, Gacha_app.py contiene una definición local de perform_gacha_draw, según la búsqueda de código.
+- logic/gacha_engine.py conserva otra implementación.
+- Hay, por tanto, varias definiciones/rutas con el mismo nombre. No asumir que son idénticas.
+- Antes de modificar probabilidades o mecánicas, identificar cuál es el flujo activo y consolidar el punto de entrada sin cambiar el comportamiento visible que ya funciona.
+
+B. Identidad e inventario:
+- Se añadió logic/roll_manager.py.
+- La persistencia de instancias se realiza en gacha_log/inventory.json.
+- sync_roll_instances() genera IDs UUID por instancia y utiliza fingerprint + occurrence para distinguir copias idénticas.
+- La normalización de Rarity, Luck y LuckValue busca conservar la identidad ante conversiones numéricas del CSV.
+- Los estados existentes son stored, equipped y discarded.
+- La sincronización conserva IDs y estados ya guardados para las filas reconocidas.
+- Gacha_app.py sincroniza las instancias al cargar historial y después de las tiradas.
+- La interfaz muestra IDs, estado, categoría, nombre, tier y rareza.
+- La acción Clear History también llama clear_inventory(), por lo que elimina los registros de instancias además del historial y los datos que limpia el tracker. tracker.clear_all() limpia también discard_transactions. Tener presente que es una acción destructiva.
+
+C. Equipamiento:
+- roll_manager.py incluye get_equipment_slots(), equip_roll(), unequip_roll(), get_equipped_rolls() y discard_roll().
+- equip_roll() valida ID, estado y límite independiente de la categoría; no permite equipar instancias discarded ni equipar dos veces la misma instancia.
+- unequip_roll() devuelve una instancia equipada al estado stored.
+- Gacha_app.py muestra el uso de espacios por cada una de las cuatro categorías y solicita el nivel mediante un number_input temporal.
+- Item y otros tipos no equipables se mantienen guardados; la interfaz permite desequipar instancias heredadas ya equipadas.
+- La interfaz permite seleccionar instancias stored/equipped y ofrece descarte con confirmación explícita. Las instancias discarded dejan de estar disponibles para acciones normales.
+
+D. Character Builder:
+- character/character.py ahora carga las instancias mediante get_equipped_rolls() desde gacha_log/inventory.json.
+- apply_gacha_items() procesa exclusivamente las instancias con estado equipped; las stored y discarded no aportan efectos.
+- El procesamiento ya no empareja por nombre ni depende de repeats.json/CSV para decidir qué instancias afectan al personaje.
+- Character Builder conserva el procesamiento de etiquetas descriptivas #STATS, #RESISTANCES y campos genéricos, cuando están presentes en Description.
+- Gacha_app.py ahora preserva los marcadores # y los saltos de línea de Description al crear una tirada, en lugar de eliminar # y aplanar todas las líneas.
+- StatsManager resuelve nombres de estadísticas sin distinguir mayúsculas/minúsculas, para que etiquetas como Mana coincidan con las claves existentes del archivo stats.json.
+- Se eliminó la definición duplicada de load_free_categories(); permanece la versión que usa validate_txt_block().
+- La integración sigue siendo PARCIAL: no hay todavía modificadores aleatorios persistidos por ID ni se confirmó que los archivos actuales de gachafiles contengan etiquetas #STATS/#RESISTANCES. La nueva ruta deja preparada la activación por equipamiento, pero no reemplaza el generador aleatorio pendiente.
+
+E. Duplicación en character.py:
+- Se observan dos definiciones de load_free_categories().
+- La duplicación fue corregida en la rama fix/category-equipment-slots: se conserva la implementación que utiliza validate_txt_block().
+
+F. Ruta del historial:
+- El flujo de tiradas escribe logs/gacha_history.csv y Character Builder carga logs/gacha_history.csv.
+- La ruta coincide en el estado inspeccionado. No cambiarla sin razón y prueba de compatibilidad.
+
+G. Posible pérdida de etiquetas de descripción:
+- El flujo anterior construía Description con desc.replace("#", "") y unía las líneas mediante espacios, lo que impedía que las etiquetas descriptivas llegaran intactas al parser.
+- En la rama fix/category-equipment-slots se cambió a conservar los marcadores y los saltos de línea originales.
+- Falta probar la lectura con archivos reales de gachafiles que contengan etiquetas; la búsqueda de código no encontró ejemplos #STATS en los archivos de datos indexados.
+
+H. Editor de archivos:
+- Gacha_app.py mantiene gachafiles, Original_gachafiles y gachafiles_versions.
+- Conserva la función de edición y versiones; no reemplazarla como parte del sistema de inventario.
+
+I. Pruebas:
+- Se añadió tests/test_roll_manager.py con pruebas para IDs distintos en tiradas idénticas, estabilidad de IDs, normalización de valores CSV, conservación de estados, limpieza de inventario, cálculo de espacios, equipar/desequipar, límites por categoría, rechazo de Item/discarded y protección ante JSON corrupto.
+- Se añadió tests/test_character_equipment.py para comprobar que solo las instancias equipped aportan los modificadores de Description y que las claves de estadísticas con distinta capitalización se resuelven correctamente.
+- Se añadió tests/test_discard_transactions.py para acreditar TP una sola vez, retirar una instancia equipada, conservar TP tras cargar el historial y proteger un points.json corrupto.
+- La existencia y el contenido de estas pruebas están comprobados en el repositorio.
+- NO se ejecutó ni verificó una corrida de la suite en esta sesión. No afirmar que las pruebas pasan hasta ejecutarlas.
+
+6.3 Funcionalidades incorporadas desde la bitácora anterior (registro histórico; consultar la sección 11 para el estado vigente)
+
+IMPLEMENTADAS EN CÓDIGO:
+- Administrador de inventario individual en logic/roll_manager.py.
+- Persistencia de instancias en gacha_log/inventory.json.
+- IDs únicos por tirada, incluyendo tiradas repetidas con mismo contenido.
+- Conservación de IDs entre sincronizaciones y conversiones numéricas contempladas.
+- Estados stored/equipped/discarded en la estructura de inventario.
+- Consulta y visualización de inventario individual.
+- Funciones para equipar y desequipar por ID.
+- Cálculo de espacios por categoría como 3 + (nivel // 10), con nivel introducido temporalmente por la interfaz.
+- Límites independientes de Ability, Familiar, Skill y Trait en logic/roll_manager.py.
+- Interfaz con cuatro contadores de espacios independientes y controles de equipar/desequipar en Gacha_app.py.
+- Item y categorías no definidas rechazadas para equipamiento.
+- Pruebas unitarias escritas para los límites independientes y la exclusión de Item, además de las pruebas previas de inventario.
+
+IMPLEMENTADAS PARCIALMENTE / NO CUMPLEN TODAVÍA EL DISEÑO COMPLETO:
+- Nivel: existe una entrada temporal, pero no una fuente persistente conectada al personaje.
+- La implementación de límites independientes por categoría fue fusionada en main mediante PR #4.
+- Descarte: el flujo con ledger idempotente fue fusionado en main mediante PR #4; su validación automatizada sigue pendiente de ejecución.
+- Character Builder: ya basa los efectos descriptivos en instancias equipadas; falta integrar los modificadores aleatorios por ID y validar tags con datos reales.
+
+NO IMPLEMENTADAS:
+- Generación aleatoria de modificadores por ID.
+- Persistencia de modificadores aleatorios por instancia.
+- Fórmula y tabla de Luck para cantidad/calidad de estadísticas.
+- Generación y activación de modificadores aleatorios persistidos por ID; actualmente solo se procesan las etiquetas descriptivas existentes en instancias equipadas.
+- Bonus de estrella aplicado a estadísticas y condicionado por equipamiento.
+- Validación automatizada y manual del descarte y de la acreditación de TP una sola vez por ID.
+- Integración completa del generador de modificadores aleatorios por ID con Character Builder.
+- Verificación con archivos de gachafiles reales que contengan etiquetas descriptivas.
+
+6.4 Último cambio observado
+
+- El commit más reciente inspeccionado es 1bacfc6ba1fe3214a15a120ffe65f9a684aab066.
+- Mensaje: "Merge pull request #3 from Zear488/fix/repair-roll-manager-import".
+- El cambio corrige el formato de importación multilínea de logic.roll_manager en Gacha_app.py.
+- La corrección deja importadas las funciones de sincronización, consulta, limpieza, equipamiento y desequipamiento.
+- No se debe confundir esta reparación de importación con la finalización de las funciones de inventario.
+
+Estas observaciones no significan que se hayan ejecutado pruebas automatizadas. Los comportamientos que no se probaron deben marcarse como pendientes de prueba.
+
+======================================================================
+7. ORDEN RECOMENDADO DE IMPLEMENTACIÓN
+======================================================================
+
+1. Inspección del estado actual: rama, archivos, formato real del historial, flujo de TP, estructura de character/ y funcionamiento actual del Character Builder.
+2. Estabilizar el motor actual: identificar la implementación activa y resolver la duplicación de perform_gacha_draw sin cambiar probabilidades, categorías, tiers o reglas del gacha.
+3. Acordar parámetros aleatorios: tabla por tier/rareza, número de estadísticas y rangos; definir exactamente cómo interviene Luck.
+4. Identidad de tiradas: revisar y probar la implementación existente de roll_manager.py; comprobar reconciliación, historial antiguo y repeticiones antes de cambiarla.
+5. Generación persistente: generar modificadores una sola vez por ID y guardarlos; comprobar que recargar no cambia los resultados.
+6. Estados de inventario: mantener guardado, equipado y descartado; persistirlos sin alterar los datos originales del gacha.
+7. Equipamiento: implementar y probar límites independientes por categoría; conectar el nivel con una fuente acordada.
+8. Cálculo de estadísticas: Character Builder ya consume instancias equipped y procesa etiquetas descriptivas; falta integrar los modificadores aleatorios persistidos por ID y aplicar el bonus de estrella activo sin doble conteo.
+9. Descarte y TP: el flujo está implementado en la rama con ledger idempotente; ejecutar pruebas y validar que la recarga del CSV conserva los TP.
+10. Interfaz: permitir comparar instancias repetidas, equipar/desequipar y descartar; mantenerla sencilla y orientada a escritores.
+11. Pruebas y documentación: ejecutar pruebas, probar casos normales y extremos, actualizar esta bitácora y registrar el commit que contiene los cambios.
+
+======================================================================
+8. DECISIONES TODAVÍA PENDIENTES
+======================================================================
+
+- Tabla exacta de cantidad de estadísticas por cada tier/rareza existente.
+- Rangos numéricos de cada modificador según tier/rareza.
+- Fórmula matemática exacta de Luck y sus límites.
+- Confirmar formalmente si el bonus de estrella se acumula linealmente (+10% por estrella). La propuesta actual es lineal.
+- Fuente del nivel del personaje y cómo se actualiza. No diseñar experiencia o progresión de videojuego por cuenta propia.
+- Política de migración para tiradas antiguas que no tengan ID individual.
+- Confirmar si los descartes se conservan en un historial visible o solo como registro interno.
+- Definir cómo se acreditará TP por descarte sin permitir doble cobro y sin romper el tracker existente.
+- Definir si roll_stats.json es necesario o si los modificadores pueden almacenarse limpiamente en inventory.json.
+- Definir cómo se realizará la copia de seguridad local y recuperación ante archivos dañados.
+- Revisar y fusionar la rama de límites independientes por categoría después de ejecutar pruebas.
+
+No inventar respuestas. Preguntar o proponer opciones antes de fijarlas en código.
+
+======================================================================
+9. PROTOCOLO PARA FUTURAS SESIONES
+======================================================================
+
+1. Leer esta bitácora completa.
+2. Consultar el repositorio y comprobar su estado actual; no asumir que la última inspección sigue vigente.
+3. Comparar el código actual con las secciones 6 y 7.
+4. Identificar qué tareas ya están implementadas, cuáles están incompletas y cuáles faltan.
+5. No volver a implementar algo que ya funciona.
+6. No cambiar nombres, categorías, rarezas, tiers, formatos o rutas sin justificarlo y revisar compatibilidad.
+7. Hacer cambios pequeños y probarlos.
+8. Al terminar, actualizar esta bitácora con tareas terminadas, pendientes, archivos modificados, decisiones nuevas, problemas conocidos, rama y commit de referencia.
+9. Si algo no se pudo comprobar, marcarlo como por verificar, no como terminado.
+10. Mantener las decisiones generales confirmadas: autenticación NONE, almacenamiento LOCAL y usuarios SINGLE, salvo que el usuario las cambie expresamente.
+
+======================================================================
+10. REGISTRO DE CAMBIOS
+======================================================================
+
+25-11-2026 — Primera versión:
+Consolida el propósito narrativo del proyecto, las reglas de aleatoriedad, instancias con ID, equipamiento por categoría, bonus de estrella, descarte por TP, estado conocido del repositorio y orden de implementación.
+
+25-11-2026 — Segunda actualización:
+- Se incorporan las decisiones del usuario: sin autenticación, almacenamiento local y un solo usuario.
+- Se añade la arquitectura objetivo sin cuentas ni servicios externos.
+- Se actualiza el análisis del repositorio en la rama main, commit 1eea5c6f02f937b34a12cb72130a95f8d8839429.
+- Se documenta la duplicación de perform_gacha_draw entre Gacha_app.py y logic/gacha_engine.py.
+- Se precisa que repeats.json no puede representar instancias repetidas individuales.
+- Se documenta que Character Builder aún depende de posesión por nombre y necesita integrarse con instancias equipadas.
+- Se confirma que la ruta logs/gacha_history.csv coincide en el flujo inspeccionado; la discrepancia anterior parece resuelta.
+- Se registra la duplicación de load_free_categories() y el posible conflicto entre eliminación de etiquetas # en Description y el parser.
+- Se aclara que las observaciones de código no equivalen a pruebas ejecutadas.
+- Se prioriza estabilizar el motor antes de introducir IDs y modificadores persistentes.
+
+26-11-2026 — Tercera actualización:
+- Se compara main con el commit 1eea5c6f02f937b34a12cb72130a95f8d8839429: 15 commits de avance.
+- Se identifica el nuevo módulo logic/roll_manager.py y el archivo de datos gacha_log/inventory.json.
+- Se documentan IDs UUID persistentes por tirada y la reconciliación mediante fingerprint + occurrence.
+- Se registra la interfaz para consultar, equipar y desequipar instancias individuales.
+- Se documenta el cálculo actual de espacios 3 + (nivel // 10), aclarando que el nivel todavía se introduce temporalmente.
+- Se detecta que el límite actual es global y no respeta todavía los límites independientes por categoría acordados.
+- Se confirma que Character Builder todavía no utiliza las instancias equipadas para calcular estadísticas.
+- Se aclara que discarded existe como estado permitido, pero no hay todavía flujo de descarte ni recompensa TP por ID.
+- Se registra tests/test_roll_manager.py y sus casos cubiertos; no se afirma que la suite haya sido ejecutada.
+- Se registra el último commit inspeccionado: 1bacfc6ba1fe3214a15a120ffe65f9a684aab066, que repara el import multilínea de roll_manager.
+- Se actualiza el orden de implementación para aprovechar lo que ya existe y completar primero las integraciones faltantes.
+
+26-11-2026 — Cuarta actualización (rama fix/category-equipment-slots):
+- Se creó una rama de trabajo desde main para corregir el límite global del equipamiento.
+- logic/roll_manager.py ahora define explícitamente las categorías equipables Ability, Familiar, Skill y Trait.
+- equip_roll() cuenta solo las instancias equipped de la misma categoría que la instancia que se intenta equipar; los espacios de las otras categorías no se consumen.
+- Se conserva la fórmula 3 + (nivel // 10), aplicada por separado a cada categoría.
+- Item y cualquier tipo no incluido en las cuatro categorías no pueden equiparse; permanecen en estado stored.
+- La interfaz Gacha_app.py muestra contadores separados para Ability, Familiar, Skill y Trait.
+- La interfaz permite desequipar registros que ya estuvieran equipados aunque su Type no sea una categoría equipable actual.
+- Se ampliaron tests/test_roll_manager.py para probar límites independientes, crecimiento al nivel 10, independencia entre Ability y Skill y exclusión de Item.
+- Archivos modificados: logic/roll_manager.py, tests/test_roll_manager.py, Gacha_app.py, character/character.py y character/stats_manager.py; se añadió tests/test_character_equipment.py.
+- Commits de esta rama: 07946fa2a46f3e0ef1279c6c61795724463430e7 (lógica), c5925f73504a421b58af4ffda0b832c64da71fb7 (pruebas de inventario), 6d81b3fccda64946fc8d54cba0e563b8259c9c20 y 927624c97ef2e37e8d6d9e6abe933b8d45f257c2 (interfaz), 51d72fa700dc6652b327c5c13ec4ab3643ac60e6 y 483bec69ebed3002d86a6da9176cccfefe5a6e8e (Character Builder), 9d8299f80418e4d711cce277a28766b60c569a11 (integración de interfaz), 9800a5d5e13eeaaef5f98b5390139eb19ad9be42 (pruebas de Character Builder), e5ef00e0ab79d600d8b46e1ebb5e20af3ae428dd y 1ce10d252983ced58419ae31afd9d9211cae633a (preservación de Description y limpieza), 4a869d794ba5ec92722e0110e32add8429ca9d81 y bdf021832869f1bc20428e3c9f94d51bda54c99c (manejo de carga del inventario en Character Builder), 1ec4a26427849d1602f893abd9c87c8d94f90652, e9869d8dfcfa9c361927084639e24692dc731542, c83aae0f36fa185b0e2af657137ac857ba5990d7, 1ace012195121cfba36974304748ef5111802a6d y bc7e2fada6da167399f019858421ffd5b26bf237 (descarte, ledger de TP y protección de points.json), 40b5b608a58413acbcb9b05add3aa5811c907f2f y ec8ca4de85cb7d31e8a0d4257ddd4e0f361a42a7 (interfaz de descarte), ffd7a410911ad1327d4d5a88ddf9cfb659115360 y e9b03d2e5fb02250c55827fa57cb31d259699df9 (pruebas de descarte y protección de puntos).
+- Character Builder ahora usa únicamente instancias equipadas para aplicar los efectos soportados en Description; se corrigió la comparación de nombres de estadísticas ignorando mayúsculas/minúsculas.
+- Se preservan marcadores # y saltos de línea al guardar Description desde el flujo de tiradas, para no eliminar los tags que interpreta el parser.
+- Se eliminó la definición duplicada de load_free_categories().
+- Se añadieron pruebas de integración de Character Builder. Las pruebas fueron añadidas, pero no se ejecutaron en este entorno. Estado de ejecución: PENDIENTE.
+- Estado en la fecha de esta entrada histórica: la rama todavía no estaba fusionada; posteriormente PR #4 fue fusionado en main. Ver actualización de la sección 11.
+
+
+26-11-2026 — Quinta actualización (descarte y Character Builder):
+- Se implementó discard_roll() para descartar una instancia individual por ID y otorgar el TP correspondiente al tier.
+- Los valores de descarte se centralizaron en logic/tracker.py y se reutilizan desde logic/roll_manager.py.
+- points.json ahora conserva un ledger discard_transactions por ID, evitando que una misma instancia otorgue TP más de una vez.
+- La recarga del historial CSV reconstruye los puntos de repetición y conserva los créditos de descarte del ledger.
+- La escritura de JSON del tracker es atómica. Si points.json está corrupto, el programa no lo sobrescribe silenciosamente; muestra un aviso y bloquea cambios de puntos.
+- La interfaz ofrece un checkbox de confirmación antes de descartar y muestra el TP otorgado.
+- Character Builder procesa descripciones solo desde instancias equipped; stored y discarded no aportan modificadores.
+- Se preservan los marcadores # y saltos de línea de Description en el flujo de tiradas para que el parser pueda reconocer tags.
+- StatsManager compara los nombres de estadísticas sin distinguir mayúsculas/minúsculas.
+- Se añadieron pruebas para el flujo de descarte, la idempotencia del TP, la persistencia tras recargar CSV y la protección de points.json corrupto.
+- Las pruebas automatizadas siguen sin ejecutarse; no afirmar que pasan.
+- No hay ejecuciones de GitHub Actions asociadas al último commit inspeccionado.
+- Estado en la fecha de esta entrada histórica: PR #4 todavía no estaba fusionado. Estado vigente posterior: PR #4 fusionado en main; consultar sección 11.
+
+
+======================================================================
+11. ACTUALIZACIÓN VIGENTE — REVISIÓN DE MAIN Y DISEÑO DE MODIFICADORES
+======================================================================
+
+Fecha de actualización: 26-11-2026.
+Repositorio: Zear488/Chaos-Gacha-Web.
+Commit de referencia de main: 81f2fc1c7f9b87ac37c52c9d8687711685d30e35.
+PR #4: fusionado en main. URL: https://github.com/Zear488/Chaos-Gacha-Web/pull/4.
+Rama utilizada para esta actualización documental: docs/update-bitacora-modifier-design.
+
+Esta sección es la referencia vigente. Si alguna sección anterior indica que PR #4 está abierto, que los límites por categoría o el descarte siguen en una rama pendiente, o que las reglas de modificadores aún no se han definido, prevalece esta sección. Las entradas anteriores se conservan como historial de lo que se sabía en sus respectivas fechas.
+
+11.1 Estado del repositorio verificado
+
+- main contiene la fusión del PR #4 en el commit 81f2fc1c7f9b87ac37c52c9d8687711685d30e35.
+- La rama fix/category-equipment-slots ya no debe tratarse como una rama con cambios pendientes de integrar para las funciones del PR #4.
+- logic/roll_manager.py mantiene el inventario persistente por instancia en gacha_log/inventory.json. Cada tirada se identifica por ID y conserva su estado.
+- Los estados stored, equipped y discarded, el equipamiento por ID y los límites independientes de Ability, Familiar, Skill y Trait están incorporados en main.
+- Los límites por categoría siguen la fórmula 3 + (level // 10). El nivel continúa siendo una entrada temporal de interfaz; no se encontró una fuente persistente de nivel de personaje.
+- El descarte individual y el ledger discard_transactions en points.json están incorporados. El ledger evita acreditar TP dos veces por ID y el flujo de recarga conserva los créditos de descarte.
+- Character Builder carga las instancias equipadas, procesa sus descripciones y no aplica efectos desde instancias stored o discarded.
+- character/stats_manager.py todavía realiza suma de modificadores convencionales; no se encontró integrado el cálculo de modificadores aleatorios percent/flat ni el bonus de estrellas.
+- Gacha_app.py conserva LuckValue y Luck en los resultados. No cambiar sus fórmulas ni las probabilidades generales del gacha como parte de esta tarea.
+- Se observaron dos implementaciones/rutas de perform_gacha_draw (Gacha_app.py y logic/gacha_engine.py). No consolidarlas ni modificarlas durante la implementación de modificadores salvo que sea imprescindible y se autorice como tarea separada.
+- En la revisión de main, characterfiles/stats.json y el fallback de character/loader.py tenían las diez estadísticas en 0. Deben actualizarse a 1 para cumplir la decisión de estadísticas iniciales.
+- Existen pruebas de inventario/equipamiento, Character Builder y descarte. No se ejecutó la suite durante esta revisión; estado de ejecución: NO VERIFICADO. No afirmar que pasan.
+
+11.2 Estadísticas iniciales confirmadas
+
+El personaje de nivel 1 debe comenzar con 1 punto en cada una de estas diez estadísticas:
+STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa y Ataque.
+
+Actualizar tanto characterfiles/stats.json como el diccionario fallback de character/loader.py a 1, manteniendo nombres y estructura. Esta modificación todavía está pendiente.
+
+11.3 Reglas confirmadas de modificadores aleatorios
+
+Categorías elegibles:
+- Ability
+- Familiar
+- Skill
+- Trait
+- Item queda excluido de los modificadores estadísticos en esta etapa.
+
+Todos los modificadores aleatorios son positivos. No generar modificadores negativos.
+
+Cada espacio es uno de estos dos tipos:
+- percent: bonificación porcentual.
+- flat: suma puntos directos a una estadística.
+
+Una misma instancia puede tener ambos tipos sobre una misma estadística. Cada entrada consume un espacio individual. Ejemplo: STR +5 flat y STR +5 percent son dos modificadores distintos y consumen dos espacios.
+
+11.4 Cantidad de espacios por tier
+
+Tier         | Cantidad de modificadores
+Trash        | 0
+Common       | 1
+Uncommon     | 1–2
+Rare         | 2
+Elite        | 2–3
+Epic         | 3
+Legendary    | 3–4
+Mythical     | 4
+Divine       | 4–5
+Transcendent | 5–6
+
+Para tiers con intervalo, Luck influye en la probabilidad de obtener el espacio adicional. Los espacios mínimos son garantizados.
+
+11.5 Rangos de magnitud por tier
+
+Bonificaciones porcentuales (percent):
+
+Tier         | Rango
+Common       | +1–3%
+Uncommon     | +2–4%
+Rare         | +3–5%
+Elite        | +4–6%
+Epic         | +5–8%
+Legendary    | +7–10%
+Mythical     | +9–12%
+Divine       | +11–15%
+Transcendent | +14–20%
+
+Puntos directos (flat), tabla actualizada a petición del usuario para que tengan mayor impacto:
+
+Tier         | Rango
+Common       | +2–4
+Uncommon     | +3–5
+Rare         | +4–7
+Elite        | +5–8
+Epic         | +6–10
+Legendary    | +8–13
+Mythical     | +10–16
+Divine       | +13–21
+Transcendent | +17–28
+
+Los rangos flat son una propuesta acordada como dirección de magnitud ("mayores") y esta es la tabla de trabajo vigente. Deben evaluarse mediante pruebas de balance cuando exista la progresión real de estadísticas; no se deben ajustar silenciosamente.
+
+11.6 Cálculo de estadísticas
+
+Los modificadores flat se suman primero; después se suman los porcentajes y se aplican al subtotal:
+
+S_random = (S_base + SUM(flat)) * (1 + SUM(percent) / 100) - S_base
+
+El bonus de estrellas se aplica únicamente a la contribución aleatoria:
+
+S_final = S_base + S_random * B_star
+
+B_star = 1 + 0.10 * MIN(N_star, 4)
+
+Donde N_star es el número de instancias equipadas con estrella. El bonus máximo es +40%. Una instancia con estrella solo cuenta mientras esté equipada. No contar dos veces una estrella que aparezca en Element y también en Notes. No multiplicar cada modificador porcentual de forma compuesta: los porcentajes se suman y se aplican una sola vez al subtotal.
+
+Ejemplo: base Ataque = 20, flat = +5 y percent = +5%.
+- Sin estrellas: (20 + 5) * 1.05 = 26.25.
+- Con dos instancias equipadas con estrella: 20 + (26.25 - 20) * 1.20 = 27.5.
+
+Los modificadores descriptivos existentes de Description/#STATS deben conservar su funcionamiento. La propuesta de separar su contribución de la aleatoria para que las estrellas solo afecten a la parte aleatoria debe validarse al integrar StatsManager; no cambiar la semántica de los tags existentes sin pruebas.
+
+11.7 Luck
+
+Se reutiliza el LuckValue ya producido por el gacha. No cambiar LuckValue, Luck mostrado, ni las probabilidades de tirada.
+
+Para el cálculo interno:
+L = 100 - clamp(LuckValue, 0, 100)
+
+Así, L más alto representa una tirada con mejor suerte.
+
+Probabilidad de obtener el espacio adicional en los tiers con intervalo:
+P_extra = 20% + 25% * (L / 100)
+
+L = 0   -> 20%
+L = 25  -> 26.25%
+L = 50  -> 32.5%
+L = 75  -> 38.75%
+L = 100 -> 45%
+
+La magnitud se sesga hacia el extremo superior del rango según Luck. La distribución acordada como propuesta de trabajo es:
+x = u ** (2 - 1.5 * (L / 100))
+value = min_value + x * (max_value - min_value)
+donde u es uniforme en [0, 1]. Luck bajo concentra más resultados cerca del mínimo; Luck alto desplaza la distribución hacia el máximo. Nunca exceder el rango del tier.
+
+11.8 Reglas de selección todavía propuestas, no confirmadas expresamente
+
+Se había propuesto:
+- Elegir al azar entre las diez estadísticas disponibles.
+- Elegir el tipo flat/percent con probabilidad 50/50 por espacio.
+- No repetir el mismo par (stat, kind) dentro de una misma instancia, aunque sí permitir la misma estadística con el otro tipo.
+
+Estas reglas no fueron seleccionadas en las decisiones finales de la conversación; tratarlas como propuesta pendiente de confirmación antes de codificarlas. No presentarlas como requisito confirmado.
+
+11.9 Persistencia y migración
+
+- Guardar los modificadores finales generados en el propio registro de cada instancia de inventory.json, si la estructura actual lo permite sin duplicar datos.
+- No crear roll_stats.json ni otro archivo separado sin demostrar que inventory.json no puede cubrir el requisito.
+- Estructura conceptual:
+  "modifiers_generated": true
+  "modifier_generation_version": 1
+  "modifiers": [{"stat": "STR", "kind": "flat", "value": 5}, {"stat": "STR", "kind": "percent", "value": 5}]
+- El ejemplo anterior es ilustrativo; adaptar nombres y validación al esquema real.
+- Persistir resultados finales por ID. No volver a sortear al recargar, equipar, desequipar ni cambiar la versión del generador.
+- Una instancia vieja sin modificadores debe generarlos una sola vez cuando corresponda; una instancia que ya tenga resultados debe conservarlos.
+- Los datos originales de gachafiles no se modifican para almacenar los resultados aleatorios.
+- Item queda excluido.
+- Mantener compatibilidad con inventory.json existentes y preservar campos adicionales durante sincronización.
+
+11.10 Orden de implementación actualizado
+
+1. Crear pruebas unitarias para fórmulas de Luck, rangos, cantidad de espacios y tipos de modificadores.
+2. Actualizar las estadísticas iniciales a 1 en characterfiles/stats.json y en el fallback de character/loader.py.
+3. Revisar la estructura exacta de inventory.json y sync_roll_instances() en main; añadir campos sin perder IDs, estados ni metadatos.
+4. Implementar generación persistente por instancia y evitar re-roll.
+5. Integrar el cálculo flat/percent en StatsManager, preservando #STATS/#RESISTANCES.
+6. Integrar el bonus de estrella solo sobre la contribución aleatoria y solo con instancias equipadas.
+7. Conectar Character Builder y comprobar equipar, desequipar y descartar.
+8. Probar compatibilidad con inventarios antiguos, tiradas repetidas, JSON corrupto y cambios de versión.
+9. Ejecutar la suite completa y registrar resultados reales; no declarar pruebas exitosas sin ejecución.
+10. Actualizar esta bitácora al terminar cada etapa.
+
+11.11 Pendientes que sí siguen abiertos
+
+- Confirmar las reglas de selección 50/50 de tipo y no repetición de (stat, kind).
+- Evaluar el balance de rangos flat y percent frente a la progresión real del personaje.
+- Confirmar el manejo de precisión y redondeo en la interfaz (la propuesta es conservar dos decimales, pero no está formalmente confirmada).
+- Determinar si los modificadores descriptivos #STATS deben combinarse de una forma específica con el bonus aleatorio; preservar el comportamiento actual hasta probarlo.
+- Definir la fuente persistente del nivel del personaje; no inventar experiencia ni progresión jugable.
+- Ejecutar las pruebas existentes y las nuevas.
+- Verificar con archivos reales de gachafiles que contengan etiquetas descriptivas.
+
+======================================================================
+12. REGISTRO DE CAMBIOS — ACTUALIZACIÓN DEL 26-11-2026
+======================================================================
+
+Sexta actualización:
+- Se revisó la bitácora en main y se comprobó que su encabezado y varias secciones todavía describían PR #4 como abierto y los cambios como pendientes.
+- Se verificó que PR #4 está fusionado en main; commit de referencia: 81f2fc1c7f9b87ac37c52c9d8687711685d30e35.
+- Se revisaron inventory/roll_manager, Character Builder, StatsManager, loader, LuckValue, estrellas y pruebas existentes.
+- Se documenta el diseño acordado de modificadores flat y percent, sus rangos por tier, cantidad por tier, Luck y bonus de estrellas.
+- Se confirma el valor inicial 1 para las diez estadísticas; el cambio de código sigue pendiente.
+- Se aclara que la generación y persistencia de modificadores aleatorios todavía no está implementada.
+- Se aclara que las pruebas existentes fueron añadidas, pero no se verificó su ejecución.
+- Se registran como propuestas pendientes las reglas de selección 50/50 y no repetición del mismo par (stat, kind).
+- Esta actualización es documental. No se modificó código de la aplicación ni se ejecutaron pruebas.
+
+======================================================================
+13. AVANCE DE IMPLEMENTACIÓN — 26-11-2026
+======================================================================
+
+Rama de trabajo: feature/persistent-roll-modifiers.
+Base: main, commit 81f2fc1c7f9b87ac37c52c9d8687711685d30e35.
+Esta rama no se ha fusionado. No se han modificado los archivos originales de gachafiles.
+
+13.1 Cambios de código realizados en esta rama
+
+- characterfiles/stats.json: las diez estadísticas iniciales ahora tienen valor 1.
+- character/loader.py: el fallback de estadísticas también utiliza valor 1 para las diez estadísticas.
+- character/stats_manager.py: ahora conserva los modificadores descriptivos heredados por separado de los modificadores aleatorios flat y percent.
+- StatsManager aplica primero los flat, suma los porcentajes y aplica esa suma una sola vez al subtotal. El bonus de estrellas multiplica únicamente la contribución aleatoria y se limita a cuatro estrellas (+40%).
+- character/character.py: Character Builder aplica los modificadores persistidos en la instancia equipada; solo procesa las instancias que devuelve get_equipped_rolls().
+- La detección de estrella reconoce el prefijo ★ en Element o el texto "Boosted Star Bonus" en Notes. Una instancia cuenta una sola vez aunque ambos marcadores aparezcan.
+- Se añadieron tests/test_stats_manager_modifiers.py y tests/test_character_random_modifiers.py.
+
+13.2 Ejemplo de cálculo cubierto por las pruebas añadidas
+
+Base STR = 20; modificador descriptivo #STATS STR +3; modificadores aleatorios flat +5 y percent +5%; una instancia equipada con estrella.
+Contribución aleatoria = (20 + 5) * 1.05 - 20 = 6.25.
+Con una estrella: 6.25 * 1.10 = 6.875.
+Resultado final = 20 + 3 + 6.875 = 29.875.
+
+13.3 Estado de validación y límites actuales
+
+- Los cambios fueron escritos en GitHub mediante commits en la rama de trabajo.
+- No se ejecutó la suite de pruebas en un entorno Python; las pruebas añadidas están pendientes de ejecución.
+- Todavía no existe el generador aleatorio de modificadores ni la asignación persistente automática por instancia.
+- Todavía no se conectó LuckValue a la generación de modificadores.
+- inventory.json no se ha migrado ni se ha añadido la marca modifiers_generated.
+- No se han alterado las probabilidades ni el motor general del gacha.
+- Las reglas de selección 50/50 entre flat/percent y la prohibición de repetir el mismo par (stat, kind) siguen pendientes de confirmación.
+- La precisión/redondeo visible sigue pendiente de confirmación; los cálculos conservan el valor numérico sin redondeo prematuro.
+- La rama no se ha fusionado y no se ha abierto un PR para esta etapa.
+
+Próximo paso:
+Confirmar las reglas de selección de tipo y repetición para implementar el generador persistente sin asumir decisiones que siguen marcadas como pendientes. Después, añadir generación por tier/Luck, persistencia por ID, migración de instancias existentes y pruebas de no reroll, equipamiento, descarte y compatibilidad.
+
+======================================================================
+14. GENERACIÓN PERSISTENTE — REGLAS CONFIRMADAS E IMPLEMENTACIÓN INICIAL
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/persistent-roll-modifiers.
+
+14.1 Confirmación del usuario
+
+Quedan confirmadas estas reglas:
+- Cada espacio de modificador tiene probabilidad 50/50 de ser flat o percent.
+- Una instancia no puede repetir el mismo par (stat, kind).
+- La misma estadística sí puede aparecer una vez como flat y otra como percent.
+La implementación selecciona pares únicos entre las 20 combinaciones posibles (10 estadísticas x 2 tipos), lo que mantiene la selección simétrica de tipos.
+
+14.2 Generador añadido
+
+- Nuevo módulo logic/modifier_generator.py.
+- Define estadísticas disponibles, rangos flat/percent por tier y espacios mínimos/máximos.
+- LuckValue se invierte y limita al intervalo 0–100: L = 100 - clamp(LuckValue, 0, 100).
+- Para tiers con espacio extra, aplica P_extra = 20% + 25% * L/100.
+- Magnitudes usan x = u ** (2 - 1.5 * L/100) y quedan limitadas al rango correspondiente.
+- Los pares (stat, kind) se seleccionan sin reemplazo.
+- Item y Trash no reciben modificadores.
+- Instancias elegibles reciben modifiers, modifiers_generated y modifier_generation_version.
+- logic/roll_manager.py llama ensure_roll_modifiers() durante sync_roll_instances(); resultados se guardan dentro del registro de la instancia en inventory.json. Una instancia con modifiers_generated ya verdadero no se vuelve a sortear.
+- Inventario heredado sin modificadores recibe generación durante la siguiente sincronización del historial, conservando ID y estado.
+- La generación no modifica las filas originales del CSV ni los archivos gachafiles.
+
+14.3 Pruebas añadidas
+
+- tests/test_modifier_generator.py: Luck invertido, rangos por tier, probabilidad de espacio extra, sesgo de magnitud, pares únicos, exclusión de Item/Trash y persistencia sin reroll.
+- tests/test_stats_manager_modifiers.py: cálculo flat/percent, suma de porcentajes, estrellas y validación.
+- tests/test_character_random_modifiers.py: detección de estrella y combinación de modificadores equipados con #STATS.
+
+14.4 Validación pendiente
+
+No se ha ejecutado la suite de pruebas en esta sesión. No declarar las pruebas aprobadas hasta ejecutarlas.
+No se ha realizado validación visual/manual de Streamlit ni inspección con datos reales de todos los archivos gachafiles.
+Los cambios permanecen en esta rama; no se ha fusionado a main.
+
+Próximos pasos:
+- Revisar el diff completo de la rama y compatibilidad con el flujo Streamlit.
+- Ejecutar todas las pruebas en un entorno Python.
+- Corregir cualquier fallo y después abrir/revisar el PR.
+- Confirmar que la UI del Character Builder presenta decimales de forma adecuada.
+
+======================================================================
+15. OBSERVACIONES DE REVISIÓN DEL USUARIO Y NUEVOS REQUISITOS
+======================================================================
+
+Fecha: 26-11-2026.
+Origen: revisión manual del usuario sobre la versión de la rama
+feature/persistent-roll-modifiers / PR #6.
+
+IMPORTANTE:
+Esta sección registra requisitos y problemas observados por el usuario.
+En esta actualización solo se modificó la bitácora: no se cambió código,
+no se ejecutaron pruebas y no se afirma que los problemas hayan sido
+reproducidos independientemente. Estos puntos se incorporan al plan y
+deben atenderse antes de considerar completa la etapa.
+
+15.1 Exportación e importación del historial CSV
+
+Problema observado:
+- Desde "Show Roll History" se descarga el CSV del gacha.
+- Al intentar cargar ese mismo CSV, la aplicación devuelve:
+  "Invalid CSV format. Missing columns: Luck, Color, Description".
+- En el archivo descargado se observan las columnas:
+  ID, Status, Type, Element, Tier, Rarity.
+- Por tanto, el CSV exportado actualmente no conserva toda la información
+  que el importador exige ni toda la información necesaria para reconstruir
+  las tiradas y sus estadísticas.
+
+Requisitos:
+- El CSV exportado debe poder importarse de nuevo en otra ocasión sin
+  producir el error de columnas faltantes.
+- Debe conservar el ID único de cada instancia. No regenerar IDs durante
+  una exportación/importación normal ni confundir copias idénticas.
+- Debe incluir los campos que el importador requiere actualmente, como
+  Luck, Color y Description, además de los campos existentes.
+- Debe transportar también los modificadores/estadísticas generados de
+  cada objeto, incluyendo su tipo (flat o percent), estadística, valor y
+  marca de generación/versión cuando corresponda.
+- La importación debe reconstruir los datos de cada instancia, no solo su
+  nombre, categoría y rareza. Debe conservar la relación con ID y estado.
+- Mantener compatibilidad con archivos CSV antiguos cuando sea posible;
+  validar columnas y ofrecer un error claro si falta información que no
+  pueda recuperarse.
+- No volver a sortear estadísticas/modificadores ya incluidos en el archivo.
+
+Criterio de aceptación:
+Exportar el historial, cargar el CSV exportado en otra sesión/ocasión y
+recuperar las mismas instancias con los mismos IDs y modificadores.
+
+15.2 Descuento real de TP al obtener el bonus de estrellas
+
+Problema observado:
+- El usuario informa que los TP no parecen descontarse realmente cuando
+  se obtiene/activa el bonus de estrellas.
+
+Requisitos:
+- Revisar el flujo completo de compra/activación del bonus: validación de
+  saldo, cálculo del coste, descuento y persistencia.
+- El coste debe restarse efectivamente del saldo de TP, no limitarse a
+  mostrar un mensaje o actualizar temporalmente la interfaz.
+- El nuevo saldo debe sobrevivir a recargar la aplicación.
+- Evitar doble descuento por una sola activación y evitar activar el bonus
+  si no hay saldo suficiente.
+- Mostrar con claridad el coste cobrado y el saldo restante.
+- Mantener la protección de transacciones/ledger ya existente para
+  operaciones de TP y no romper los créditos por descarte.
+
+Criterio de aceptación:
+Activar el bonus descuenta exactamente el coste una vez; después de
+recargar, el saldo sigue reflejando el descuento.
+
+15.3 Inspección de modificadores sin equipar el objeto
+
+Problema observado:
+- Actualmente el usuario debe equipar un objeto para poder ver qué ofrece.
+- Incluso equipado, la interfaz no deja suficientemente claro si la
+  mejora es flat o porcentual.
+
+Requisitos:
+- Permitir consultar los modificadores de cualquier instancia desde el
+  inventario, sin necesidad de equiparla.
+- Mostrar por cada modificador: nombre de la estadística, tipo de
+  modificador (Flat / Percent) y valor.
+- Distinguir visual y textualmente, por ejemplo:
+  STR +8 (Flat)
+  STR +7% (Percent)
+- Si una instancia tiene ambos tipos sobre la misma estadística, mostrar
+  ambos por separado.
+- La vista previa es informativa: inspeccionar un objeto no debe equiparlo
+  ni aplicar sus modificadores al personaje.
+- Indicar claramente qué instancias están equipadas y cuáles guardadas.
+
+Criterio de aceptación:
+Desde el inventario se pueden inspeccionar todos los beneficios de una
+instancia y distinguir inmediatamente puntos directos de porcentajes,
+sin alterar el equipamiento ni las estadísticas activas.
+
+15.4 Nivel del personaje basado en las tiradas realizadas
+
+Requisito nuevo:
+- Implementar el sistema de nivel del personaje usando como base la
+  cantidad de tiradas realizadas hasta el momento.
+- El nivel debe derivarse del total de pulls registrados/historial
+  disponible, según una fórmula de progresión que se definirá antes de
+  implementarse.
+- La fuente de datos debe ser consistente y no contar dos veces tiradas
+  repetidas al reconstruir o importar historial.
+- La progresión debe persistir y reconstruirse correctamente al cargar
+  el historial/guardado.
+- No inventar una fórmula, umbrales ni recompensas de nivel en esta
+  actualización. Quedan pendientes de diseño y confirmación.
+- Mantener el alcance como progresión de nivel del personaje; no convertir
+  el proyecto en un juego con combate, misiones, enemigos o economía
+  compleja.
+
+15.5 Sección de datos y edición del personaje
+
+Requisito nuevo:
+- Añadir una sección de perfil/editor junto al área del personaje.
+- Debe permitir escribir y editar datos descriptivos personalizados,
+  usando nombres de campos en inglés.
+- Incluir como mínimo campos/categorías para:
+  Race, Class, Lineage, Talent, Element, Factions, Reputations,
+  Resistances y otros campos descriptivos ya contemplados por el sistema.
+- Mantener Resistances como categoría editable y compatible con los
+  datos de resistencias existentes.
+- La información escrita debe pertenecer al perfil del personaje y no
+  alterar archivos fuente de gachafiles ni las tablas globales del gacha.
+- Permitir añadir/editar texto según el formato que use cada categoría,
+  sin imponer contenido predefinido al usuario.
+
+15.6 Imagen del personaje
+
+- Permitir asociar una imagen/portrait al perfil del personaje.
+- La imagen debe conservarse al guardar y volver a cargar el perfil.
+- La imagen es parte de los datos del personaje, no un elemento temporal
+  de la interfaz.
+- Definir durante implementación un formato/ruta de almacenamiento
+  compatible con el modelo local actual.
+
+15.7 Guardado y recuperación completa del personaje
+
+Requisito principal:
+- Incorporar un medio para guardar el personaje tal como se encuentra y
+  recuperarlo posteriormente.
+- El guardado debe incluir los datos del personaje y los datos necesarios
+  del gacha, tomando en cuenta que el CSV contiene el historial de tiradas.
+- Debe preservar, como mínimo:
+  * Historial/filas del gacha y sus campos necesarios para reconstrucción.
+  * IDs únicos de instancias y estado de cada una (equipped/stored/
+    discarded, según el modelo vigente).
+  * Modificadores generados y sus valores/tipos; no volver a sortearlos.
+  * TP y registro de transacciones para evitar créditos/descuentos dobles.
+  * Nivel del personaje y datos necesarios para reconstruirlo desde el
+    historial, una vez definida la fórmula.
+  * Estadísticas base y cualquier configuración propia del personaje.
+  * Datos descriptivos editados (Race, Class, Factions, Resistances, etc.).
+  * Imagen/portrait asociado.
+- La restauración debe recuperar el estado guardado, no mezclarlo
+  silenciosamente con datos de otra sesión/personaje ni duplicar tiradas.
+- El formato de guardado debe ser portable y coherente con el modo local
+  actual (sin introducir cuentas, login, nube o sincronización).
+- Definir si se usará un archivo de perfil/paquete de guardado que incluya
+  el historial CSV y los demás datos asociados. No asumir que el CSV por
+  sí solo puede representar todo el estado: el guardado completo debe
+  transportar también inventario, TP, modificadores, perfil e imagen.
+- La importación/exportación CSV seguirá siendo útil para el historial
+  del gacha; el guardado completo del personaje será la vía para restaurar
+  el estado integral.
+
+15.8 Orden de trabajo recomendado
+
+1. Corregir el contrato de exportación/importación CSV y asegurar que
+   exportar y volver a importar conserva IDs y modificadores.
+2. Corregir y validar el descuento persistente de TP del bonus de estrellas.
+3. Añadir inspección de modificadores desde inventario sin equipar.
+4. Diseñar y acordar la fórmula de nivel basada en pulls antes de codificar.
+5. Añadir la sección de perfil/editor del personaje con campos en inglés.
+6. Añadir portrait y persistencia de imagen.
+7. Diseñar e implementar guardado/restauración integral del personaje,
+   incluyendo historial CSV, inventario, IDs, modificadores, TP, nivel,
+   perfil e imagen.
+8. Validar el flujo completo con exportación, importación y recarga.
+
+15.9 Restricciones que siguen vigentes
+
+- Esta actualización es exclusivamente documental. No se autoriza aquí
+  ningún cambio de código.
+- No fusionar PR #6 ni modificar main sin autorización explícita.
+- Mantener almacenamiento LOCAL y uso SINGLE; no agregar autenticación,
+  cuentas, nube ni sincronización.
+- No modificar probabilidades del motor gacha ni archivos fuente de
+  gachafiles para resolver estos requisitos.
+- No generar nuevamente modificadores que ya estén persistidos por ID.
+- Inventario y equipamiento siguen siendo conceptos separados.
+- Las instancias descartadas no aportan estadísticas al personaje.
+- Item continúa excluido del sistema de modificadores/equipamiento
+  estadístico mientras no se acuerde lo contrario.
+- No añadir combate, misiones, enemigos ni sistemas ajenos al alcance
+  de Chaos Gacha Web.
+
+======================================================================
+16. PRIMERA CORRECCIÓN POSTERIOR A LA REVISIÓN — CSV COMPLETO
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/persistent-roll-modifiers.
+Alcance de esta etapa: exportación e importación del historial CSV.
+
+16.1 Diagnóstico confirmado en código
+
+- El importador de Gacha_app.py exigía Type, Element, Rarity, Tier, Luck,
+  Description y Color.
+- La exportación de Show Roll History solo incluía columnas presentes en
+  la lista de vista del historial y no añadía metadatos de inventory.json.
+- La vista de inventario resumía cada instancia en seis columnas: ID,
+  Status, Type, Element, Tier y Rarity.
+- Por ello, el CSV descargado desde Show Roll History no era una copia
+  completa restaurable del inventario y no garantizaba recuperar los
+  modificadores generados.
+
+16.2 Cambios de código realizados en la rama
+
+- Nuevo módulo logic/history_csv.py.
+- Se definió un esquema CSV completo con:
+  ID, Status, Type, Element, Rarity, Tier, LuckValue, Luck, Description,
+  Color, Notes, Modifiers, ModifiersGenerated y
+  ModifierGenerationVersion.
+- El exportador une historial e inventario mediante fingerprint y
+  occurrence, de modo que las tiradas idénticas conservan IDs separados.
+- El importador admite tanto el CSV completo como CSV antiguos que tengan
+  las columnas mínimas Type, Element, Rarity y Tier. Los campos
+  opcionales ausentes se reconstruyen como vacíos cuando es posible.
+- El importador valida Status, JSON de modificadores, estructura de cada
+  modificador, tipo flat/percent, valor no negativo e IDs duplicados.
+- Los metadatos de instancia se transportan internamente separados de los
+  campos originales de la tirada, para que no contaminen el fingerprint
+  ni la reconstrucción de TP/repetidos.
+- logic/roll_manager.py reconoce IDs importados y restaura el estado,
+  los modificadores, la marca modifiers_generated y la versión del
+  generador. La generación no debe reemplazar los modificadores que
+  vienen incluidos en el CSV.
+- Gacha_app.py utiliza el nuevo parser al cargar y ofrece la descarga
+  como "Generate Complete CSV File" / "Download Complete History as CSV".
+- Se añadieron tests/test_history_csv.py para columnas completas,
+  round-trip de ID/status/modificadores, CSV antiguo y Status inválido.
+
+16.3 Criterios de aceptación que deben verificarse
+
+- Descargar desde Show Roll History y cargar el archivo en una instalación
+  limpia conserva IDs, estado y modificadores.
+- Exportar nuevamente después de importar sigue asociando cada instancia
+  con su ID, incluso si el CSV se vuelve a exportar varias veces.
+- Dos tiradas idénticas se conservan como instancias distintas.
+- Modificadores ya persistidos nunca se vuelven a sortear.
+- La importación de CSV antiguo no falla por faltar Luck, Color o
+  Description; cuando esos datos no existan, se conservan vacíos y no se
+  inventan.
+- El historial cargado sigue alimentando el tracker sin enviar los campos
+  internos de metadatos al cálculo de repetidos/TP.
+
+16.4 Estado de validación
+
+- Se escribieron los cambios y pruebas en GitHub.
+- No se ejecutaron tests de Python ni una prueba manual real de Streamlit
+  desde esta sesión.
+- No declarar esta corrección validada hasta ejecutar las pruebas y
+  realizar una importación/exportación real.
+- PR #6 permanece abierto como borrador; no se ha fusionado.
+- La rama estaba un commit detrás de main al realizar la comparación.
+  Antes de integrar, revisar ese avance y resolver cualquier divergencia.
+
+16.5 Próximo trabajo
+
+1. Ejecutar tests/test_history_csv.py y la suite existente.
+2. Probar el ciclo de exportar -> importar -> exportar de nuevo.
+3. Comprobar importación en inventario vacío y en inventario existente.
+4. Revisar la persistencia de TP y el flujo del bonus de estrellas como
+   siguiente apartado independiente de la bitácora.
+5. Después continuar con inspección de modificadores desde el inventario.
+
+======================================================================
+17. CORRECCIONES DE INTERFAZ TRAS PRUEBA DEL CSV
+======================================================================
+
+Fecha: 26-11-2026.
+Origen: reporte del usuario al probar la corrección CSV en Streamlit.
+
+17.1 Error al cargar CSV desde el área de texto
+
+Error reportado:
+Invalid history CSV: st.session_state['manual_csv'] cannot be modified
+after the widget with that key is instantiated.
+
+Causa:
+- load_csv_data() intentaba asignar una cadena vacía a
+  st.session_state["manual_csv"] después de crear el text_area con key
+  "manual_csv".
+- Streamlit no permite modificar desde el flujo normal la clave de estado
+  que pertenece a un widget ya instanciado.
+
+Corrección en código:
+- Se eliminó la escritura sobre st.session_state["manual_csv"].
+- La carga ahora se realiza de forma explícita con botones separados para
+  archivo subido y texto pegado.
+- Se conserva el contenido del área de texto después de cargarlo; el
+  usuario puede editarlo o reemplazarlo manualmente.
+- La función load_csv_data() devuelve un booleano de resultado y ya no
+  modifica el estado interno del widget.
+
+17.2 El inventario se cerraba al seleccionar una tirada
+
+Problema reportado:
+- Al abrir Individual Roll Inventory y seleccionar una instancia, el
+  contenedor se cerraba durante el rerun normal de Streamlit.
+- El usuario quiere decidir cuándo abrirlo y cerrarlo, sin que seleccionar
+  una tirada cierre el inventario.
+
+Corrección en código:
+- Se sustituyó el st.expander por un checkbox persistente que controla la
+  visibilidad del inventario.
+- La selección de una instancia y las acciones de equipar/desequipar ya no
+  dependen del estado temporal de un expander.
+- El usuario controla explícitamente cuándo mostrar u ocultar el inventario.
+
+17.3 Reequipar instancias importadas
+
+- Se añadió una prueba unitaria que importa una instancia en estado stored,
+  conserva sus modificadores y comprueba que equip_roll() puede equiparla.
+- No se modificó la regla que impide equipar instancias descartadas.
+- Las instancias que ya llegan con status equipped se mantienen equipadas;
+  para volver a seleccionar su estado se deben desequipar desde la UI.
+
+17.4 Estado de validación
+
+- Cambios aplicados a Gacha_app.py y tests/test_history_csv.py.
+- No se han ejecutado las pruebas automatizadas ni una prueba interactiva
+  de Streamlit en esta sesión.
+- Debe probarse: pegar CSV -> Load pasted CSV -> abrir inventario ->
+  seleccionar stored -> equipar -> seleccionar otra instancia; el
+  inventario debe permanecer abierto.
+- PR #7 continúa sin fusionarse hasta validar el ciclo real.
+
+======================================================================
+18. ACLARACIONES Y CORRECCIONES: TP, CLEAR HISTORY Y BONUS GLOBAL
+======================================================================
+
+Fecha: 26-11-2026.
+Origen: observaciones del usuario después de validar el CSV completo.
+
+18.1 TP gastados al activar Boosted Star Bonus
+
+Problema:
+- El usuario observó que el saldo TP no se reducía de forma persistente
+  cuando una tirada obtenía el bonus de estrella pagado con TP.
+
+Causa localizada:
+- GachaHistoryTracker.load_from_log() reconstruía el saldo leyendo el
+  importe gastado desde Notes con la expresión regular
+  r"-\s*(\d+)\s*TP".
+- Esa expresión solo aceptaba números enteros.
+- El coste de la mejora puede ser fraccionario, ya que los TP por
+  repetidos/descarte usan decimales. Ejemplo: "-5.025 TP".
+- En consecuencia, el descuento podía aparecer en Notes, pero al
+  reconstruir el saldo desde el historial no se restaba el importe
+  fraccionario y los puntos parecían reaparecer.
+
+Corrección aplicada:
+- La expresión ahora reconoce importes decimales (entero o decimal).
+- La reconstrucción resta el coste como float y conserva redondeo a
+  seis decimales en el saldo final.
+- Se añadió una prueba que reconstruye el saldo con +5 TP de repetidos,
+  +0.025 TP de descarte y -5.025 TP de bonus, cuyo resultado correcto
+  es 0.000 TP.
+
+Nota de diseño:
+- La activación pagada debe registrar el coste exacto consumido.
+- No basta con escribir una nota visual: el saldo persistente reconstruido
+  debe reflejar la resta real.
+- La probabilidad base de estrella no debe confundirse con el bonus
+  incrementado mediante TP.
+
+18.2 Clear History también elimina logs/gacha_history.csv
+
+Problema:
+- El botón Clear History limpiaba session_state, repeats.json,
+  points.json e inventory.json, pero no eliminaba logs/gacha_history.csv.
+
+Corrección aplicada:
+- Clear History elimina logs/gacha_history.csv si existe.
+- Limpia el historial en session_state, el CSV de descarga temporal,
+  los indicadores de visualización del historial, el inventario, repeats
+  y el estado/ledger de TP.
+- Muestra confirmación en la interfaz.
+
+Criterio:
+Después de Clear History no debe quedar el CSV anterior para que
+Character Builder lo vuelva a cargar accidentalmente. Esta acción
+representa borrar el historial completo, el inventario y los TP, no solo
+ocultar las filas de la interfaz.
+
+18.3 Aclaración de propósito: Character Builder es descriptivo
+
+Confirmación del usuario:
+- Chaos Gacha Web se utiliza para generar y documentar elementos que
+  después se integran en una historia/roleo.
+- No se busca un videojuego funcional ni un simulador de combate.
+- Las estadísticas de la hoja Character Builder son datos descriptivos
+  del personaje para la historia.
+- STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa y Ataque no
+  deben modificar probabilidades, resultados ni calidad de los pulls.
+- No implementar combate, daño, economía jugable, misiones ni lógica de
+  habilidades activables.
+- LCK dentro de Character Builder es una estadística narrativa, no una
+  entrada para el motor gacha.
+- LuckValue/Luck generado por el propio gacha es un dato distinto: sigue
+  formando parte de los resultados y de la fórmula ya acordada para
+  generar magnitudes/cantidad de modificadores. No confundirlo con LCK
+  del personaje.
+- TP es la única estadística/recurso del personaje que el usuario ha
+  autorizado a intervenir en la tirada, a través del aumento de
+  probabilidad del bonus de estrella.
+
+Regla de arquitectura:
+Character Builder puede leer modificadores persistidos y mostrar
+estadísticas resultantes para el personaje; nunca debe enviar sus
+estadísticas de vuelta al motor gacha.
+
+18.4 Bonus de estrella: alcance global
+
+Diseño anterior:
+- El bonus de estrella aumentaba únicamente la contribución de los
+  modificadores aleatorios, +10% por estrella equipada, hasta cuatro.
+
+Nueva aclaración del usuario:
+- Una tirada con bonus de estrella debe aumentar de forma general las
+  estadísticas, sin depender de cuál estadística o tipo de modificador
+  haya obtenido.
+- El usuario planteó considerar reducir el incremento de +10% a +5%.
+
+Decisión de implementación adoptada en esta rama:
+- +5% global por cada instancia con estrella que esté equipada.
+- El multiplicador se aplica a todas las estadísticas finales del
+  Character Builder, incluyendo estadísticas base, modificaciones
+  descriptivas #STATS y modificadores aleatorios.
+- La cantidad se suma linealmente: 1 estrella = +5%; 2 = +10%;
+  3 = +15%; 4 o más = máximo +20%.
+- Las estrellas se cuentan por instancias equipadas; una instancia
+  almacenada o descartada no aporta bonus.
+- La detección de estrella sigue usando el prefijo ★ y/o Notes sin
+  doble conteo de la misma instancia.
+- El bonus global se aplica a las estadísticas del personaje, no a
+  Resistances ni a campos narrativos, salvo futura decisión explícita.
+- Este multiplicador solo afecta el resultado descriptivo del
+  Character Builder; no altera pulls, tiers, LuckValue ni probabilidades.
+
+Fórmula:
+S_final = (S_base + D + contribución_random) * (1 + 0.05 * N)
+N = número de instancias equipadas con estrella, limitado a 4.
+
+Cambios de código:
+- character/stats_manager.py aplica ahora el multiplicador a toda la
+  estadística final.
+- tests/test_stats_manager_modifiers.py comprueba que incluso una
+  estadística sin modificadores aleatorios (Mana) recibe el bonus global.
+- Se actualizaron las expectativas de la prueba de dos estrellas.
+
+18.5 Estado de validación
+
+- Los cambios se aplicaron en la rama fix/tp-spending-and-clear-history,
+  creada desde main.
+- Se modificaron logic/tracker.py, Gacha_app.py, character/stats_manager.py
+  y pruebas asociadas.
+- No se ejecutó la suite automatizada ni una prueba manual en Streamlit.
+- Debe comprobarse:
+  1. Activar una estrella con TP fraccionarios y recargar la app.
+  2. Confirmar que el saldo queda descontado y no reaparece.
+  3. Confirmar que Clear History elimina logs/gacha_history.csv y los
+     archivos de estado asociados.
+  4. Equipar una instancia con ★ sin modificadores y comprobar que todas
+     las estadísticas reciben +5%.
+  5. Equipar hasta cuatro instancias con ★ y comprobar el límite +20%.
+  6. Verificar que LCK de Character Builder no cambia las probabilidades
+     ni la magnitud de tiradas futuras.
+
+======================================================================
+19. VALIDACIÓN DEL USUARIO Y SIGUIENTE ETAPA
+======================================================================
+
+Fecha: 26-11-2026.
+Origen: el usuario probó las correcciones del bloque 18 y confirmó que
+los cambios funcionaron correctamente.
+
+19.1 Validación funcional reportada por el usuario
+
+- El CSV completo funciona y registra correctamente los datos de las
+  instancias.
+- El usuario confirmó que las correcciones del consumo de TP, Clear
+  History y bonus global de estrella fueron satisfactorias.
+- El bonus global queda establecido en +5% por instancia equipada con
+  estrella, hasta +20% (cuatro instancias).
+- El consumo de TP admite importes decimales y el descuento se conserva
+  al reconstruir el historial.
+- Clear History debe limpiar también logs/gacha_history.csv y los datos
+  persistentes asociados.
+- Esta confirmación corresponde a validación funcional manual del
+  usuario. No equivale a una ejecución automatizada de la suite; no
+  afirmar que los tests hayan pasado sin ejecutarlos.
+
+19.2 Alcance de Character Builder reafirmado
+
+- Es una ficha descriptiva/narrativa para roleo.
+- Las estadísticas de la ficha no influyen en pulls.
+- No agregar sistemas de combate o simulación.
+- LuckValue del pull permanece como dato propio del motor gacha para
+  generación de modificadores. LCK del personaje es descriptivo.
+- TP conserva su función autorizada de recurso para el bonus de estrella.
+
+19.3 Siguiente tarea autorizada: inspección de modificadores desde inventario
+
+Objetivo:
+- Al seleccionar cualquier instancia en Individual Roll Inventory, mostrar
+  los atributos que ofrece sin necesidad de equiparla.
+- Diferenciar claramente modificadores flat (puntos directos) y percent
+  (porcentaje).
+- Mostrar valor, estadística afectada y signo/unidad.
+- Mostrar también los bonuses descriptivos heredados #STATS y
+  #RESISTANCES que existan en Description.
+- Si la instancia tiene bonus de estrella, indicar que al equiparla aporta
+  +5% global a todas las estadísticas finales del personaje. Dejar claro
+  que este efecto solo cuenta mientras esté equipada.
+- La inspección es solo de lectura: no equipar, desequipar, descartar,
+  modificar ni volver a sortear datos.
+- Item sigue excluido del sistema de modificadores estadísticos; mostrar
+  cualquier descripción que tenga, sin inventarle estadísticas.
+
+Criterios de aceptación:
+1. Seleccionar una tirada stored permite inspeccionar sus estadísticas.
+2. Seleccionar una tirada equipped muestra exactamente los mismos
+   modificadores persistidos.
+3. Flat aparece en puntos (+N.NN); Percent aparece en porcentaje (+N.NN%).
+4. #STATS y #RESISTANCES se distinguen de modificadores aleatorios.
+5. Una instancia con ★ muestra el bonus global de +5% si está equipada.
+6. Inspeccionar no altera el estado de la instancia ni genera nuevos rolls.
+7. El panel de inventario permanece abierto al seleccionar otras instancias.
+
+19.4 Después de la inspección
+
+Continuar en este orden:
+1. Diseñar la fórmula de nivel basada en cantidad de pulls antes de
+   implementarla. Evitar contar dos veces tiradas repetidas al importar
+   o restaurar CSV.
+2. Añadir perfil/editor descriptivo junto a Character Builder con campos
+   en inglés (Race, Class, Lineage, Talent, Element, Factions,
+   Reputations, Resistances y campos adicionales).
+3. Permitir asociar y conservar un portrait.
+4. Diseñar guardado/restauración integral portable del personaje,
+   incluyendo historial CSV, IDs, estados de inventario, modificadores,
+   TP/ledger, nivel, estadísticas base, perfil e imagen.
+5. Validar exportación, importación y restauración completa.
+
+19.5 Restricciones
+
+- Mantener LOCAL / SINGLE; no agregar cuentas, login, nube ni sync.
+- No alterar probabilidades del gacha.
+- No usar estadísticas de Character Builder como entrada del motor gacha.
+- No re-sortear modificadores persistidos.
+- No fusionar PRs sin autorización explícita.
+- La bitácora registra decisiones y progreso; el repositorio sigue siendo
+  fuente de verdad del código.
+
+======================================================================
+20. INSPECCIÓN DE MODIFICADORES EN INDIVIDUAL ROLL INVENTORY
+======================================================================
+
+Fecha: 26-11-2026.
+Rama de trabajo: fix/tp-spending-and-clear-history.
+Alcance: mostrar los atributos de una instancia sin equiparla.
+
+20.1 Implementación añadida
+
+- Al seleccionar una instancia en Individual Roll Inventory se muestra
+  un panel "Inspect selected pull".
+- El panel es de solo lectura y no cambia status, IDs ni datos guardados.
+- Muestra modificadores aleatorios persistidos con tres columnas:
+  Stat, Modifier y Value.
+- Flat se etiqueta como Flat y se muestra como puntos directos (+N.NN).
+- Percent se etiqueta como Percent y se muestra con porcentaje (+N.NN%).
+- Si no existen modificadores, explica si el objeto es Item, si la
+  instancia ya fue generada sin modificadores o si no hay datos persistidos.
+- Interpreta los tags descriptivos #STATS y #RESISTANCES desde Description
+  y los presenta por separado de los modificadores aleatorios.
+- Los tags repetidos en varias líneas se acumulan para no ocultar valores.
+- Muestra la descripción original completa.
+- Si la tirada tiene marca ★ o nota Boosted Star Bonus, muestra el bonus
+  global de +5%. Si está equipada, informa que está activo; si está
+  almacenada, indica que se activará al equiparla.
+- No genera nuevos modificadores, no llama a equip_roll() y no altera
+  el estado de inventario al inspeccionar.
+
+20.2 Reglas de presentación
+
+- Modificadores Flat y Percent son fuentes diferentes y nunca deben
+  mostrarse como si fueran el mismo tipo.
+- #STATS y #RESISTANCES son datos descriptivos heredados de Description;
+  no deben confundirse con los modificadores aleatorios persistidos.
+- Item sigue excluido de los modificadores aleatorios y no se le inventan
+  estadísticas.
+- El bonus de estrella es global para todas las estadísticas finales de
+  Character Builder, +5% por estrella equipada hasta +20%.
+- La inspección no debe cerrar el panel Individual Roll Inventory ni
+  modificar la selección.
+
+20.3 Validación pendiente
+
+- Código actualizado en Gacha_app.py.
+- No se ejecutó Streamlit ni la suite automatizada desde esta sesión.
+- El usuario debe comprobar con:
+  1. Una instancia stored con Flat y Percent.
+  2. Una instancia equipped con los mismos modificadores.
+  3. Una instancia con #STATS y #RESISTANCES.
+  4. Una instancia ★ almacenada y luego equipada.
+  5. Un Item y una instancia sin modificadores.
+- En todos los casos, abrir la inspección no debe cambiar el estado,
+  volver a sortear modificadores ni cerrar el inventario.
+
+20.4 Siguiente tarea: definir progresión de nivel por tiradas
+
+- La bitácora solicita diseñar la fórmula antes de implementarla.
+- No se debe tomar automáticamente el input temporal de nivel de slots
+  como nivel persistente del personaje.
+- El nivel debe derivarse del total de tiradas lanzadas, con una regla
+  explícita de conteo y umbrales.
+- Decidir si cuenta toda tirada, solo tiradas no descartadas o tiradas
+  únicas; los repetidos no deben duplicarse accidentalmente al importar
+  historial.
+- Definir si Clear History reinicia el nivel (debe seguir la misma fuente
+  de verdad del historial).
+- No implementar nivel hasta acordar la fórmula y el criterio de conteo.
+
+======================================================================
+21. ESTADO GIT Y PROPUESTA DE PROGRESIÓN POR TIRADAS
+======================================================================
+
+Fecha: 26-11-2026.
+
+21.1 Integración de las correcciones confirmadas
+
+- El usuario confirmó que las correcciones de TP fraccionarios,
+  Clear History y bonus global de estrella funcionaron correctamente.
+- PR #10 fue fusionado en main.
+- Commit de merge: d687477834757d24c95d1f96a2f5cd5a0ccf69c8.
+- Los cambios de inspección del inventario se separaron en PR #11,
+  creado desde el main actualizado.
+- PR #11 está abierto como borrador y no se ha fusionado.
+- No se reportan tests automatizados ejecutados para PR #11.
+
+21.2 Propuesta inicial para nivel por cantidad de pulls (NO CONFIRMADA)
+
+Objetivo:
+- El nivel del personaje debe derivarse de la cantidad de tiradas
+  realizadas, no de estadísticas, Luck ni atributos del Character Builder.
+- El nivel es descriptivo y solo se usa como fuente persistente para
+  límites de equipamiento y presentación de perfil.
+- No otorga puntos de estadísticas, no cambia probabilidades ni modifica
+  el resultado de los pulls.
+
+Propuesta de curva progresiva:
+- Nivel 1 comienza con 0 tiradas.
+- Tiradas acumuladas necesarias para alcanzar nivel L:
+  RequiredPulls(L) = 5 * L * (L - 1).
+- Umbrales resultantes:
+  Nivel 1: 0
+  Nivel 2: 10
+  Nivel 3: 30
+  Nivel 4: 60
+  Nivel 5: 100
+  Nivel 6: 150
+  Nivel 7: 210
+  Nivel 8: 280
+  Nivel 9: 360
+  Nivel 10: 450
+  Nivel 11: 550
+  Nivel 12: 660
+  Nivel 13: 780
+  Nivel 14: 910
+  Nivel 15: 1050
+- La fórmula equivale a requerir 10 * (L-1) tiradas adicionales para
+  pasar del nivel L-1 al nivel L.
+- No se establece un nivel máximo en esta propuesta.
+
+Criterio de conteo propuesto:
+- Cada fila de historial representa una tirada individual y suma 1.
+- Los repetidos cuentan: siguen siendo tiradas realizadas.
+- Se cuentan todas las categorías, incluidos Item, Ability, Familiar,
+  Skill y Trait.
+- El estado posterior de la instancia no cambia el conteo: stored,
+  equipped y discarded siguen siendo tiradas realizadas.
+- Importar el CSV no debe duplicar filas; cada instancia/ID se cuenta
+  una sola vez. Si el CSV antiguo no contiene IDs, el importador debe
+  asignar IDs estables por fila al sincronizar.
+- Clear History reinicia el conteo porque elimina el historial.
+- El nivel se deriva del historial en vez de mantener un contador
+  independiente que pueda desincronizarse.
+
+Relación con equipamiento:
+- La fórmula actual de espacios por categoría permanece:
+  3 + floor(level / 10).
+- El nivel 10, alcanzado a las 450 tiradas con esta propuesta, daría
+  cuatro espacios por categoría.
+- No se otorgan atributos ni ventajas de juego al subir de nivel.
+
+Estado:
+- La fórmula y los criterios anteriores son una propuesta para revisión,
+  no una decisión confirmada por el usuario.
+- No implementar la progresión hasta confirmar la curva y el conteo.
+- El siguiente paso después de acordar el nivel será añadir el perfil
+  descriptivo y después el guardado integral con portrait.
+
+FIN DE LA BITÁCORA
