@@ -1275,27 +1275,27 @@ with st.form("character_profile_form"):
         "Narrative-only information. These fields do not affect gacha pulls "
         "or the character's generated stat modifiers."
     )
-    st.text_input("Name", key="profile_name_{profile_widget_generation}")
+    st.text_input("Name", key=f"profile_name_{profile_widget_generation}")
     profile_cols = st.columns(2)
     with profile_cols[0]:
-        st.text_input("Race", key="profile_race_{profile_widget_generation}")
-        st.text_input("Class", key="profile_class_{profile_widget_generation}")
-        st.text_input("Lineage", key="profile_lineage_{profile_widget_generation}")
-        st.text_input("Talent", key="profile_talent_{profile_widget_generation}")
-        st.text_input("Element", key="profile_element_{profile_widget_generation}")
-        st.text_input("Age", key="profile_age_{profile_widget_generation}")
-        st.text_input("Gender", key="profile_gender_{profile_widget_generation}")
-        st.text_input("Origin", key="profile_origin_{profile_widget_generation}")
+        st.text_input("Race", key=f"profile_race_{profile_widget_generation}")
+        st.text_input("Class", key=f"profile_class_{profile_widget_generation}")
+        st.text_input("Lineage", key=f"profile_lineage_{profile_widget_generation}")
+        st.text_input("Talent", key=f"profile_talent_{profile_widget_generation}")
+        st.text_input("Element", key=f"profile_element_{profile_widget_generation}")
+        st.text_input("Age", key=f"profile_age_{profile_widget_generation}")
+        st.text_input("Gender", key=f"profile_gender_{profile_widget_generation}")
+        st.text_input("Origin", key=f"profile_origin_{profile_widget_generation}")
     with profile_cols[1]:
-        st.text_area("Factions (one per line)", key="profile_factions_{profile_widget_generation}", height=90)
-        st.text_area("Reputations (one per line)", key="profile_reputations_{profile_widget_generation}", height=90)
-        st.text_area("Resistances (one per line)", key="profile_resistances_{profile_widget_generation}", height=90)
-        st.text_area("Titles (one per line)", key="profile_titles_{profile_widget_generation}", height=90)
+        st.text_area("Factions (one per line)", key=f"profile_factions_{profile_widget_generation}", height=90)
+        st.text_area("Reputations (one per line)", key=f"profile_reputations_{profile_widget_generation}", height=90)
+        st.text_area("Resistances (one per line)", key=f"profile_resistances_{profile_widget_generation}", height=90)
+        st.text_area("Titles (one per line)", key=f"profile_titles_{profile_widget_generation}", height=90)
 
-    st.text_area("Appearance", key="profile_appearance_{profile_widget_generation}")
-    st.text_area("Personality", key="profile_personality_{profile_widget_generation}")
-    st.text_area("Background", key="profile_background_{profile_widget_generation}")
-    st.text_area("Notes", key="profile_notes_{profile_widget_generation}")
+    st.text_area("Appearance", key=f"profile_appearance_{profile_widget_generation}")
+    st.text_area("Personality", key=f"profile_personality_{profile_widget_generation}")
+    st.text_area("Background", key=f"profile_background_{profile_widget_generation}")
+    st.text_area("Notes", key=f"profile_notes_{profile_widget_generation}")
     uploaded_portrait = st.file_uploader(
         "Character portrait (PNG, JPG or WEBP; max 10 MB)",
         type=["png", "jpg", "jpeg", "webp"],
