@@ -15,6 +15,17 @@ from logic.roll_manager import (
 )
 from logic.history_csv import parse_history_csv, strip_import_metadata, serialize_history_csv
 from character.parser import parse_stats, parse_resistances
+from character.progression import (
+    STAT_NAMES, get_level_from_pulls, get_progress_to_next_level,
+    points_earned_for_level, load_character_progress, allocate_stat_points,
+    clear_character_progress,
+)
+from character.profile_manager import (
+    SCALAR_FIELDS, LIST_FIELDS, default_character_profile,
+    load_character_profile, save_character_profile, get_portrait_path,
+    multiline_to_list, list_to_multiline,
+)
+from logic.character_save import create_character_save, restore_character_save
 import numpy as np
 import math
 import altair as alt
@@ -92,6 +103,7 @@ if st.sidebar.button("🗑️ Clear History"):
     st.session_state["rendering_log"] = False
     tracker.clear_all()
     clear_inventory()
+    clear_character_progress()
 
     # Remove the persisted raw gacha history as well as the JSON state.
     history_path = os.path.join("logs", "gacha_history.csv")
@@ -927,15 +939,15 @@ if st.session_state["show_individual_inventory_toggle"]:
                 "Equip and unequip individual copies by ID. Only equipped "
                 "instances are intended to affect character statistics."
             )
-            character_level = st.number_input(
-                "Character level for slot calculation "
-                "(temporary input; no saved level source is connected yet)",
-                min_value=1,
-                value=1,
-                step=1,
-                key="inventory_character_level",
+            # Level is derived from unique history rows; repeated pulls
+            # count because each row represents a separate narrative event.
+            character_pull_count = len(st.session_state.get("log", []))
+            character_level = get_level_from_pulls(character_pull_count)
+            slot_limit = get_equipment_slots(character_level)
+            st.caption(
+                f"Character level: {character_level} · "
+                f"Pulls recorded: {character_pull_count}"
             )
-            slot_limit = get_equipment_slots(int(character_level))
             st.caption("Equipment limits are independent for each category.")
             slot_columns = st.columns(len(EQUIPMENT_CATEGORIES))
             for column, category in zip(slot_columns, EQUIPMENT_CATEGORIES):
@@ -1148,6 +1160,223 @@ from character.validator import ValidationReport
 st.markdown("---")
 st.header("🧬 Character Builder Integration")
 
+# Narrative level and stat-point allocation. Character attributes are never
+# used by the gacha engine; only the pull history determines level.
+character_pull_count = len(st.session_state.get("log", []))
+level_progress = get_progress_to_next_level(character_pull_count)
+character_level = level_progress["level"]
+earned_stat_points = points_earned_for_level(character_level)
+
+st.subheader("📈 Narrative Character Progression")
+st.write(
+    f"**Level {character_level}** · "
+    f"{character_pull_count} documented pull(s)"
+)
+st.progress(
+    level_progress["pulls_into_level"] / max(1, level_progress["pulls_for_this_level"])
+)
+st.caption(
+    f"{level_progress['pulls_into_level']} / "
+    f"{level_progress['pulls_for_this_level']} pulls toward level "
+    f"{character_level + 1}. "
+    f"Next level reward: +{character_level + 1} stat points."
+)
+
+try:
+    progression_data = load_character_progress()
+    allocated_total = sum(progression_data["allocated"].values())
+    available_stat_points = earned_stat_points - allocated_total
+    if available_stat_points < 0:
+        st.warning(
+            f"Your saved allocations exceed the points currently earned by "
+            f"{abs(available_stat_points)}. They have been preserved; no "
+            "additional points can be allocated until the history supports them."
+        )
+        available_stat_points = 0
+
+    point_col1, point_col2 = st.columns(2)
+    point_col1.metric("Stat points earned", earned_stat_points)
+    point_col2.metric("Available to allocate", available_stat_points)
+
+    with st.expander("🧮 Allocate character stat points", expanded=available_stat_points > 0):
+        allocation_stat = st.selectbox(
+            "Choose a stat",
+            options=list(STAT_NAMES),
+            key="progression_stat_choice",
+        )
+        allocation_amount = st.number_input(
+            "Points to allocate",
+            min_value=1,
+            max_value=max(1, available_stat_points),
+            value=1,
+            step=1,
+            disabled=available_stat_points <= 0,
+            key="progression_stat_amount",
+        )
+        if st.button(
+            "Save stat allocation",
+            disabled=available_stat_points <= 0,
+            key="save_progression_allocation",
+        ):
+            try:
+                allocate_stat_points(
+                    allocation_stat,
+                    int(allocation_amount),
+                    character_pull_count,
+                )
+                st.success(
+                    f"Allocated {allocation_amount} point(s) to {allocation_stat}."
+                )
+                st.rerun()
+            except ValueError as error:
+                st.error(str(error))
+
+    st.caption("Current level-up allocations")
+    st.dataframe(
+        pd.DataFrame([
+            {"Stat": stat, "Allocated": value}
+            for stat, value in progression_data["allocated"].items()
+        ]),
+        use_container_width=True,
+        hide_index=True,
+    )
+except ValueError as error:
+    st.error(f"Character progression could not be loaded: {error}")
+
+st.subheader("🧑 Character Profile")
+
+try:
+    saved_profile = load_character_profile()
+except ValueError as error:
+    st.error(f"Character profile could not be loaded: {error}")
+    saved_profile = default_character_profile()
+
+portrait_path = get_portrait_path(saved_profile)
+if portrait_path:
+    st.image(portrait_path, caption="Current character portrait", width=220)
+
+# Versioned keys let a restored package refresh form fields on rerun
+# without mutating Streamlit widget state after widget creation.
+profile_widget_generation = st.session_state.setdefault("profile_widget_generation", 0)
+for field in SCALAR_FIELDS:
+    widget_key = f"profile_{field.lower()}_{profile_widget_generation}"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = saved_profile.get(field, "")
+
+for field in LIST_FIELDS:
+    widget_key = f"profile_{field.lower()}_{profile_widget_generation}"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = list_to_multiline(
+            saved_profile.get(field, [])
+        )
+
+with st.form("character_profile_form"):
+    st.caption(
+        "Narrative-only information. These fields do not affect gacha pulls "
+        "or the character's generated stat modifiers."
+    )
+    st.text_input("Name", key=f"profile_name_{profile_widget_generation}")
+    profile_cols = st.columns(2)
+    with profile_cols[0]:
+        st.text_input("Race", key=f"profile_race_{profile_widget_generation}")
+        st.text_input("Class", key=f"profile_class_{profile_widget_generation}")
+        st.text_input("Lineage", key=f"profile_lineage_{profile_widget_generation}")
+        st.text_input("Talent", key=f"profile_talent_{profile_widget_generation}")
+        st.text_input("Element", key=f"profile_element_{profile_widget_generation}")
+        st.text_input("Age", key=f"profile_age_{profile_widget_generation}")
+        st.text_input("Gender", key=f"profile_gender_{profile_widget_generation}")
+        st.text_input("Origin", key=f"profile_origin_{profile_widget_generation}")
+    with profile_cols[1]:
+        st.text_area("Factions (one per line)", key=f"profile_factions_{profile_widget_generation}", height=90)
+        st.text_area("Reputations (one per line)", key=f"profile_reputations_{profile_widget_generation}", height=90)
+        st.text_area("Resistances (one per line)", key=f"profile_resistances_{profile_widget_generation}", height=90)
+        st.text_area("Titles (one per line)", key=f"profile_titles_{profile_widget_generation}", height=90)
+
+    st.text_area("Appearance", key=f"profile_appearance_{profile_widget_generation}")
+    st.text_area("Personality", key=f"profile_personality_{profile_widget_generation}")
+    st.text_area("Background", key=f"profile_background_{profile_widget_generation}")
+    st.text_area("Notes", key=f"profile_notes_{profile_widget_generation}")
+    uploaded_portrait = st.file_uploader(
+        "Character portrait (PNG, JPG or WEBP; max 10 MB)",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"profile_portrait_upload_{profile_widget_generation}",
+    )
+    save_profile_clicked = st.form_submit_button("💾 Save Character Profile")
+
+if save_profile_clicked:
+    profile_to_save = {
+        field: st.session_state.get(
+            f"profile_{field.lower()}_{profile_widget_generation}", ""
+        )
+        for field in SCALAR_FIELDS
+    }
+    for field in LIST_FIELDS:
+        profile_to_save[field] = multiline_to_list(
+            st.session_state.get(
+                f"profile_{field.lower()}_{profile_widget_generation}", ""
+            )
+        )
+    try:
+        save_character_profile(
+            profile_to_save,
+            portrait_bytes=uploaded_portrait.getvalue() if uploaded_portrait else None,
+            portrait_filename=uploaded_portrait.name if uploaded_portrait else None,
+        )
+        st.success("Character profile saved locally.")
+        st.rerun()
+    except (OSError, ValueError, TypeError) as error:
+        st.error(f"Could not save character profile: {error}")
+
+st.subheader("📦 Portable Character Save")
+
+save_col, restore_col = st.columns(2)
+with save_col:
+    if st.button("Prepare Full Character Save", key="prepare_full_character_save"):
+        try:
+            package_bytes = create_character_save(
+                st.session_state.get("log", []),
+                get_inventory(),
+            )
+            st.download_button(
+                "📥 Download Character Save (.zip)",
+                data=package_bytes,
+                file_name="chaos_gacha_character_save.zip",
+                mime="application/zip",
+                key="download_full_character_save",
+            )
+        except (OSError, ValueError, TypeError) as error:
+            st.error(f"Could not create character save: {error}")
+
+with restore_col:
+    uploaded_package = st.file_uploader(
+        "Restore full character save (.zip)",
+        type=["zip"],
+        key="restore_character_save_upload",
+    )
+    if st.button(
+        "Restore Character Save",
+        disabled=uploaded_package is None,
+        key="restore_character_save_button",
+    ):
+        try:
+            restored_rows = restore_character_save(uploaded_package.getvalue())
+            st.session_state["log"] = [
+                strip_import_metadata(row) for row in restored_rows
+            ]
+            st.session_state["csv_data"] = None
+            st.session_state["show_history"] = False
+            st.session_state["rendering_log"] = False
+            # The package already restores repeats.json and points.json;
+            # reload them directly instead of recomputing the saved TP balance.
+            tracker = GachaHistoryTracker()
+            st.session_state["profile_widget_generation"] += 1
+            st.success(
+                f"Character save restored: {len(restored_rows)} pull(s) loaded."
+            )
+            st.rerun()
+        except (OSError, ValueError, TypeError) as error:
+            st.error(f"Could not restore character save: {error}")
+
 if st.button("🧪 Generate Character From Gacha"):
     report = ValidationReport()
     char = Character()
@@ -1156,9 +1385,15 @@ if st.button("🧪 Generate Character From Gacha"):
 
     try:
         data = char.build()
-    except InventoryDataError as error:
-        st.error(f"Unable to load equipped inventory: {error}")
+    except (InventoryDataError, ValueError) as error:
+        st.error(f"Unable to build character data: {error}")
     else:
+        st.subheader("🧑 Character Profile")
+        st.json(data["profile"])
+        saved_portrait_path = get_portrait_path(data["profile"])
+        if saved_portrait_path:
+            st.image(saved_portrait_path, caption="Character portrait", width=260)
+
         st.subheader("📌 Final Stats")
         st.json(data["stats"])
 

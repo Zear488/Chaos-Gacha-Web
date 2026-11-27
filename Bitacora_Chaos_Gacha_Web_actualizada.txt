@@ -1425,66 +1425,299 @@ Fecha: 26-11-2026.
 - PR #11 está abierto como borrador y no se ha fusionado.
 - No se reportan tests automatizados ejecutados para PR #11.
 
-21.2 Propuesta inicial para nivel por cantidad de pulls (NO CONFIRMADA)
+21.2 Diseño confirmado por el usuario: progresión narrativa por tiradas
 
-Objetivo:
-- El nivel del personaje debe derivarse de la cantidad de tiradas
-  realizadas, no de estadísticas, Luck ni atributos del Character Builder.
-- El nivel es descriptivo y solo se usa como fuente persistente para
-  límites de equipamiento y presentación de perfil.
-- No otorga puntos de estadísticas, no cambia probabilidades ni modifica
-  el resultado de los pulls.
+Contexto:
+- El proyecto representa un personaje que se desarrolla dentro de una
+  historia; cada tirada corresponde a un evento que debe poder justificarse
+  narrativamente.
+- Por eso, la curva debe ser corta y legible, no una progresión de cientos
+  de tiradas por nivel.
 
-Propuesta de curva progresiva:
+Umbral por nivel:
 - Nivel 1 comienza con 0 tiradas.
+- Para alcanzar nivel 2 se requieren 2 tiradas acumuladas.
+- Para alcanzar nivel 3 se requieren 3 tiradas adicionales (5 acumuladas).
+- Para alcanzar nivel 4 se requieren 4 tiradas adicionales (9 acumuladas).
+- Para alcanzar nivel 5 se requieren 5 tiradas adicionales (14 acumuladas).
+- En general, para pasar del nivel L al nivel L+1 se requieren L+1 tiradas.
 - Tiradas acumuladas necesarias para alcanzar nivel L:
-  RequiredPulls(L) = 5 * L * (L - 1).
-- Umbrales resultantes:
-  Nivel 1: 0
-  Nivel 2: 10
-  Nivel 3: 30
-  Nivel 4: 60
-  Nivel 5: 100
-  Nivel 6: 150
-  Nivel 7: 210
-  Nivel 8: 280
-  Nivel 9: 360
-  Nivel 10: 450
-  Nivel 11: 550
-  Nivel 12: 660
-  Nivel 13: 780
-  Nivel 14: 910
-  Nivel 15: 1050
-- La fórmula equivale a requerir 10 * (L-1) tiradas adicionales para
-  pasar del nivel L-1 al nivel L.
-- No se establece un nivel máximo en esta propuesta.
+  RequiredPulls(L) = L * (L + 1) / 2 - 1.
 
-Criterio de conteo propuesto:
-- Cada fila de historial representa una tirada individual y suma 1.
-- Los repetidos cuentan: siguen siendo tiradas realizadas.
+Umbrales de referencia:
+  Nivel 1: 0
+  Nivel 2: 2
+  Nivel 3: 5
+  Nivel 4: 9
+  Nivel 5: 14
+  Nivel 6: 20
+  Nivel 7: 27
+  Nivel 8: 35
+  Nivel 9: 44
+  Nivel 10: 54
+  Nivel 11: 65
+  Nivel 12: 77
+  Nivel 13: 90
+  Nivel 14: 104
+  Nivel 15: 119
+
+Puntos de estadística por ascenso:
+- Al alcanzar un nivel, el personaje recibe puntos de estadística iguales
+  al nivel que acaba de alcanzar.
+- Nivel 2 concede 2 puntos; nivel 3 concede 3 adicionales; nivel 4
+  concede 4 adicionales; nivel 5 concede 5 adicionales, etc.
+- Los puntos se acumulan y el usuario los reparte libremente entre:
+  STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa y Ataque.
+- Ejemplo: al llegar al nivel 4 se han ganado 2 + 3 + 4 = 9 puntos.
+- Los puntos asignados se guardan localmente y se suman a las estadísticas
+  descriptivas base del Character Builder.
+- Las estadísticas no conceden bonificaciones automáticas de combate ni
+  alteran las tiradas.
+
+Criterio de conteo:
+- Cada pull individual registrado en el historial cuenta como una tirada.
+- Los repetidos cuentan: siguen siendo eventos narrativos independientes.
 - Se cuentan todas las categorías, incluidos Item, Ability, Familiar,
   Skill y Trait.
-- El estado posterior de la instancia no cambia el conteo: stored,
-  equipped y discarded siguen siendo tiradas realizadas.
-- Importar el CSV no debe duplicar filas; cada instancia/ID se cuenta
-  una sola vez. Si el CSV antiguo no contiene IDs, el importador debe
-  asignar IDs estables por fila al sincronizar.
-- Clear History reinicia el conteo porque elimina el historial.
-- El nivel se deriva del historial en vez de mantener un contador
-  independiente que pueda desincronizarse.
+- El estado de inventario no cambia el conteo: stored, equipped y
+  discarded siguen contando como tiradas ya realizadas.
+- Al importar un CSV, cada fila representa un pull. Los IDs evitan
+  duplicados accidentales; el importador rechaza IDs repetidos.
+- CSV antiguos sin ID siguen contando por fila y reciben identidad local
+  al sincronizar el inventario.
+- Clear History elimina el historial y reinicia el nivel y las
+  asignaciones de puntos.
 
 Relación con equipamiento:
-- La fórmula actual de espacios por categoría permanece:
+- Se conserva la regla existente de espacios por categoría:
   3 + floor(level / 10).
-- El nivel 10, alcanzado a las 450 tiradas con esta propuesta, daría
-  cuatro espacios por categoría.
-- No se otorgan atributos ni ventajas de juego al subir de nivel.
+- Con la nueva curva, el nivel 10 se alcanza a las 54 tiradas acumuladas.
+- El nivel solo determina el límite de equipamiento y la presentación
+  narrativa; no modifica la calidad ni la probabilidad de pulls.
 
-Estado:
-- La fórmula y los criterios anteriores son una propuesta para revisión,
-  no una decisión confirmada por el usuario.
-- No implementar la progresión hasta confirmar la curva y el conteo.
-- El siguiente paso después de acordar el nivel será añadir el perfil
-  descriptivo y después el guardado integral con portrait.
+21.3 Restricciones confirmadas
+- Las estadísticas del personaje son descriptivas/narrativas.
+- No se utilizan STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa,
+  Ataque ni puntos asignados como entradas del motor gacha.
+- La única interacción autorizada desde fuera del motor gacha sigue
+  siendo TP para el bonus de estrella.
+- LuckValue generado por el pull permanece como dato propio del gacha y
+  no debe confundirse con LCK del personaje.
+
+======================================================================
+22. IMPLEMENTACIÓN DE PROGRESIÓN NARRATIVA POR TIRADAS
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/pull-based-character-progression.
+Base: feature/inventory-modifier-inspection (PR #11, aún borrador).
+
+22.1 Módulo nuevo character/progression.py
+
+- pulls_required_for_level(level) calcula umbrales acumulados usando
+  L*(L+1)/2 - 1.
+- get_level_from_pulls(pull_count) deriva el nivel del total de filas del
+  historial.
+- get_progress_to_next_level(pull_count) devuelve progreso hacia el
+  siguiente nivel y la cantidad de tiradas faltantes.
+- points_earned_for_level(level) devuelve los puntos acumulados ganados:
+  0 en nivel 1, 2 en nivel 2, 5 en nivel 3, 9 en nivel 4, etc.
+- character_progress.json guarda asignaciones por estadística en LOCAL.
+- allocate_stat_points() valida que no se gasten más puntos de los ganados.
+- La escritura del archivo es atómica y la lectura valida el esquema.
+
+22.2 Integración de interfaz y Character Builder
+
+- Se eliminó el nivel temporal manual para espacios de equipamiento.
+- El nivel se deriva de las filas actuales de st.session_state["log"].
+- Individual Roll Inventory utiliza ese nivel derivado para calcular
+  espacios por categoría.
+- Character Builder muestra nivel, número de pulls documentados,
+  progreso al siguiente nivel, puntos ganados y puntos disponibles.
+- El usuario elige una estadística y cuántos puntos asignar.
+- Las asignaciones se guardan localmente y persisten entre recargas.
+- Character.load_stats() suma las asignaciones guardadas a las
+  estadísticas base descriptivas antes de construir la ficha.
+- Clear History reinicia las asignaciones de progresión además de borrar
+  historial, inventario y TP.
+- El sistema no pasa nivel ni estadísticas al motor gacha.
+
+22.3 Pruebas añadidas y validación pendiente
+
+- Se añadió tests/test_character_progression.py con pruebas para:
+  umbrales acumulados, límites de nivel, puntos acumulados, progreso
+  hacia el siguiente nivel, persistencia de asignaciones, rechazo de
+  sobreasignación y validación de entradas.
+- No se ejecutó la suite automatizada ni la aplicación Streamlit durante
+  esta edición.
+- Debe verificarse manualmente:
+  1. 1 pull = nivel 1; 2 pulls = nivel 2 y +2 puntos.
+  2. 5 pulls = nivel 3 y +5 puntos acumulados.
+  3. 9 pulls = nivel 4 y +9 puntos acumulados.
+  4. Repartir puntos entre distintas estadísticas y recargar la app.
+  5. Confirmar que Character Builder refleja los puntos asignados.
+  6. Confirmar que las estadísticas no cambian las probabilidades gacha.
+  7. Confirmar que Clear History reinicia nivel y puntos asignados.
+  8. Importar CSV con IDs y verificar que cada pull cuenta una sola vez.
+
+22.4 Pendiente de diseño posterior
+
+- El guardado integral portable del personaje aún debe incluir perfil,
+  portrait, historial CSV, IDs, estado de inventario, modificadores,
+  TP/ledger, progresión, estadísticas base y campos narrativos.
+- La progresión actual se persiste en character_progress.json; la futura
+  función de exportación/restauración completa deberá incluir este archivo
+  lógico dentro del paquete de guardado.
+- La importación de un CSV en otro entorno no incluye por sí sola las
+  asignaciones de puntos; estas forman parte del futuro guardado completo.
+- No añadir autenticación, nube ni sincronización.
+
+======================================================================
+23. PERFIL NARRATIVO Y RETRATO DEL PERSONAJE
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/character-profile-and-portrait.
+Base: feature/pull-based-character-progression (PR #12, borrador).
+
+23.1 Módulo character/profile_manager.py
+
+- Se añadió persistencia local de perfil en
+  characterfiles/character_profile.json.
+- Campos escalares: Name, Race, Class, Lineage, Talent, Element, Age,
+  Gender, Origin, Appearance, Personality, Background y Notes.
+- Campos de lista: Factions, Reputations, Resistances y Titles.
+- Las listas se editan una entrada por línea.
+- El esquema se valida al cargar y guardar.
+- La escritura JSON usa archivo temporal y os.replace.
+- Los campos de perfil son narrativos y no modifican pulls, probabilidades,
+  modificadores aleatorios ni cálculos de estadísticas.
+
+23.2 Retrato
+
+- El editor acepta PNG, JPG, JPEG y WEBP, máximo 10 MB.
+- El archivo se almacena localmente en characterfiles/portraits.
+- El nombre de archivo guardado se normaliza a character_portrait.ext;
+  no se usa directamente una ruta proporcionada por el usuario.
+- Se conserva el retrato anterior si no se carga uno nuevo.
+- Se muestra una vista previa del retrato actual.
+- El retrato se incluye en la salida del Character Builder mediante
+  el perfil guardado.
+
+23.3 Interfaz
+
+- Se añadió Character Profile junto a Character Builder Integration.
+- Las etiquetas de los campos están en inglés.
+- Permite guardar perfil y retrato localmente.
+- La ficha final presenta el perfil y el retrato además de estadísticas,
+  resistencias y campos procedentes de las tiradas equipadas.
+- El perfil manual y los datos procedentes de tags equipados permanecen
+  como fuentes separadas; no se suman ni sobrescriben automáticamente.
+
+23.4 Pruebas y validación
+
+- Se añadió tests/test_character_profile.py para persistencia de campos,
+  conversión de listas, almacenamiento del retrato y rechazo de extensión
+  no permitida.
+- No se ejecutaron pruebas automatizadas ni una sesión Streamlit durante
+  esta edición.
+- Validación manual pendiente: guardar, recargar, previsualizar y
+  reemplazar retrato; comprobar campos con acentos y texto multilínea.
+
+23.5 Próximo paso
+
+- Diseñar e implementar un paquete portable de guardado/restauración
+  integral del personaje.
+- Debe incluir historial CSV completo, IDs de tiradas, estados de
+  inventario, modificadores persistidos, TP y ledger, progresión y
+  puntos asignados, estadísticas base, perfil narrativo y retrato.
+- La restauración debe ser transaccional o validar todos los componentes
+  antes de reemplazar datos locales para evitar estados parciales.
+- Mantener LOCAL / SINGLE; no introducir cuentas, nube ni sincronización.
+- La importación CSV simple seguirá siendo solo historial de pulls; el
+  paquete completo será el mecanismo para trasladar todo el personaje.
+
+======================================================================
+24. PAQUETE PORTABLE DE GUARDADO Y RESTAURACIÓN
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/portable-character-save.
+Base: feature/character-profile-and-portrait (PR #13, borrador).
+
+24.1 Formato del paquete
+
+- Se añadió logic/character_save.py.
+- El formato es un ZIP versionado con manifest.json.
+- Incluye:
+  - gacha_history.csv completo con IDs, estados y modificadores.
+  - gacha_log/inventory.json.
+  - gacha_log/points.json, incluido discard_transactions.
+  - gacha_log/repeats.json.
+  - gacha_log/character_progress.json.
+  - characterfiles/character_profile.json.
+  - characterfiles/stats.json.
+  - portrait/character_portrait.ext cuando existe un retrato.
+- El paquete es independiente de cuentas, nube o sincronización.
+- La exportación usa el historial actual y el inventario persistido.
+
+24.2 Validación antes de restaurar
+
+- Se valida ZIP, manifest y versión.
+- Se validan columnas del CSV y unicidad de IDs.
+- Cada ID del historial debe existir en inventory.json.
+- El estado del CSV debe coincidir con el estado de inventario.
+- Los datos de la tirada y sus modificadores deben coincidir entre CSV
+  e inventario.
+- Se validan estructura de TP y ledger, repeticiones, progresión,
+  perfil, estadísticas y retrato.
+- Se rechazan rutas inseguras y archivos inesperados.
+- Tamaño máximo del paquete: 50 MB; retrato máximo: 10 MB.
+- La restauración prepara archivos temporales, conserva respaldos y
+  revierte los archivos reemplazados si ocurre un error durante el cambio.
+- Después de restaurar, la interfaz reconstruye el historial de sesión
+  y crea una nueva instancia del tracker para cargar exactamente el saldo
+  TP y el ledger incluidos en el paquete, sin recalcular ni alterar el
+  saldo guardado a partir de Notes.
+
+24.3 Interfaz
+
+- Se añadió "Prepare Full Character Save" y descarga ZIP.
+- Se añadió "Restore Character Save" para importar un paquete completo.
+- La restauración refresca los campos del perfil sin modificar claves
+  de widgets ya instanciadas.
+- CSV simple sigue siendo el formato para historial; ZIP es el formato
+  para trasladar el personaje completo.
+
+24.4 Pruebas y validación
+
+- Se añadió tests/test_character_save.py.
+- Cubre exportación/restauración de IDs, estados, perfil, retrato,
+  progreso, TP y rechazo de un archivo que no sea ZIP sin alterar los
+  archivos locales.
+- No se ejecutaron tests automatizados ni Streamlit en esta sesión.
+- Prueba manual pendiente:
+  1. Crear personaje con pulls repetidos, equipados y descartados.
+  2. Asignar puntos de nivel y completar perfil.
+  3. Subir un retrato.
+  4. Exportar ZIP.
+  5. Limpiar o cambiar datos locales.
+  6. Restaurar ZIP.
+  7. Confirmar IDs, modificadores, estados, TP, nivel, puntos,
+     estadísticas base, perfil y retrato.
+  8. Intentar restaurar un ZIP alterado y confirmar que los datos
+     existentes no se sobrescriben.
+
+24.5 Estado Git y siguiente validación
+
+- PR #11: inspección de modificadores, borrador.
+- PR #12: progresión narrativa por tiradas, borrador encadenado a #11.
+- PR #13: perfil y retrato, borrador encadenado a #12.
+- PR #14: guardado portable, borrador encadenado a #13.
+- Orden de integración previsto: #11, #12, #13 y #14.
+- Ningún PR de esta cadena debe fusionarse sin autorización explícita.
+- La suite automatizada no se ha ejecutado; no afirmar que pasó.
+- El repositorio no devolvió ejecuciones de GitHub Actions para los
+  commits revisados.
 
 FIN DE LA BITÁCORA
