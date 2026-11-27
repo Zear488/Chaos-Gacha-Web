@@ -1408,4 +1408,83 @@ Alcance: mostrar los atributos de una instancia sin equiparla.
   de verdad del historial).
 - No implementar nivel hasta acordar la fórmula y el criterio de conteo.
 
+======================================================================
+21. ESTADO GIT Y PROPUESTA DE PROGRESIÓN POR TIRADAS
+======================================================================
+
+Fecha: 26-11-2026.
+
+21.1 Integración de las correcciones confirmadas
+
+- El usuario confirmó que las correcciones de TP fraccionarios,
+  Clear History y bonus global de estrella funcionaron correctamente.
+- PR #10 fue fusionado en main.
+- Commit de merge: d687477834757d24c95d1f96a2f5cd5a0ccf69c8.
+- Los cambios de inspección del inventario se separaron en PR #11,
+  creado desde el main actualizado.
+- PR #11 está abierto como borrador y no se ha fusionado.
+- No se reportan tests automatizados ejecutados para PR #11.
+
+21.2 Propuesta inicial para nivel por cantidad de pulls (NO CONFIRMADA)
+
+Objetivo:
+- El nivel del personaje debe derivarse de la cantidad de tiradas
+  realizadas, no de estadísticas, Luck ni atributos del Character Builder.
+- El nivel es descriptivo y solo se usa como fuente persistente para
+  límites de equipamiento y presentación de perfil.
+- No otorga puntos de estadísticas, no cambia probabilidades ni modifica
+  el resultado de los pulls.
+
+Propuesta de curva progresiva:
+- Nivel 1 comienza con 0 tiradas.
+- Tiradas acumuladas necesarias para alcanzar nivel L:
+  RequiredPulls(L) = 5 * L * (L - 1).
+- Umbrales resultantes:
+  Nivel 1: 0
+  Nivel 2: 10
+  Nivel 3: 30
+  Nivel 4: 60
+  Nivel 5: 100
+  Nivel 6: 150
+  Nivel 7: 210
+  Nivel 8: 280
+  Nivel 9: 360
+  Nivel 10: 450
+  Nivel 11: 550
+  Nivel 12: 660
+  Nivel 13: 780
+  Nivel 14: 910
+  Nivel 15: 1050
+- La fórmula equivale a requerir 10 * (L-1) tiradas adicionales para
+  pasar del nivel L-1 al nivel L.
+- No se establece un nivel máximo en esta propuesta.
+
+Criterio de conteo propuesto:
+- Cada fila de historial representa una tirada individual y suma 1.
+- Los repetidos cuentan: siguen siendo tiradas realizadas.
+- Se cuentan todas las categorías, incluidos Item, Ability, Familiar,
+  Skill y Trait.
+- El estado posterior de la instancia no cambia el conteo: stored,
+  equipped y discarded siguen siendo tiradas realizadas.
+- Importar el CSV no debe duplicar filas; cada instancia/ID se cuenta
+  una sola vez. Si el CSV antiguo no contiene IDs, el importador debe
+  asignar IDs estables por fila al sincronizar.
+- Clear History reinicia el conteo porque elimina el historial.
+- El nivel se deriva del historial en vez de mantener un contador
+  independiente que pueda desincronizarse.
+
+Relación con equipamiento:
+- La fórmula actual de espacios por categoría permanece:
+  3 + floor(level / 10).
+- El nivel 10, alcanzado a las 450 tiradas con esta propuesta, daría
+  cuatro espacios por categoría.
+- No se otorgan atributos ni ventajas de juego al subir de nivel.
+
+Estado:
+- La fórmula y los criterios anteriores son una propuesta para revisión,
+  no una decisión confirmada por el usuario.
+- No implementar la progresión hasta confirmar la curva y el conteo.
+- El siguiente paso después de acordar el nivel será añadir el perfil
+  descriptivo y después el guardado integral con portrait.
+
 FIN DE LA BITÁCORA
