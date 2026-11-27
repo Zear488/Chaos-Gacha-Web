@@ -122,7 +122,10 @@ def _decode_and_validate(content: bytes) -> tuple[dict, list]:
         raise ValueError("The character save must be a valid ZIP package.") from exc
 
     with archive:
-        names = set(archive.namelist())
+        archive_names = archive.namelist()
+        names = set(archive_names)
+        if len(names) != len(archive_names):
+            raise ValueError("Duplicate file names found inside character save package.")
         required = {
             "manifest.json", "gacha_history.csv", "inventory.json",
             "points.json", "repeats.json", "character_progress.json",
