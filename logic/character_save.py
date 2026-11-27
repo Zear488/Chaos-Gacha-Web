@@ -13,6 +13,8 @@ from logic.tracker import POINTS_FILE, REPEATS_FILE
 from character.progression import PROGRESS_FILE, STAT_NAMES
 from character.profile_manager import (
     PROFILE_FILE,
+    SCALAR_FIELDS,
+    LIST_FIELDS,
     PORTRAIT_DIR,
     ALLOWED_PORTRAIT_EXTENSIONS,
     default_character_profile,
@@ -131,8 +133,8 @@ def _decode_and_validate(content: bytes) -> tuple[dict, list]:
             raise ValueError("Character save is missing: " + ", ".join(missing))
         if any(name.startswith("/") or ".." in name.split("/") for name in names):
             raise ValueError("Unsafe path found inside character save package.")
-        if any(info.file_size > MAX_ARCHIVE_BYTES for info in archive.infolist()):
-            raise ValueError("A file inside the character save is too large.")
+        if sum(info.file_size for info in archive.infolist()) > MAX_ARCHIVE_BYTES:
+            raise ValueError("Uncompressed character save contents exceed 50 MB.")
 
         def read_json(name):
             try:
@@ -181,6 +183,15 @@ def _decode_and_validate(content: bytes) -> tuple[dict, list]:
                 raise ValueError(f"History pull ID {roll_id} is missing from inventory.")
             if instance.get("status", "stored") != row.get("_roll_status", "stored"):
                 raise ValueError(f"Inventory status mismatch for pull ID {roll_id}.")
+            if _fingerprint(instance["pull"]) != _fingerprint({
+                key: value for key, value in row.items()
+                if not key.startswith("_roll_")
+            }):
+                raise ValueError(f"History data mismatch for pull ID {roll_id}.")
+            if row.get("_roll_modifiers") is not None and (
+                instance.get("modifiers", []) != row["_roll_modifiers"]
+            ):
+                raise ValueError(f"Modifier mismatch for pull ID {roll_id}.")
 
         points = read_json("points.json")
         if not isinstance(points, dict):
@@ -216,11 +227,14 @@ def _decode_and_validate(content: bytes) -> tuple[dict, list]:
         if not isinstance(profile, dict):
             raise ValueError("Invalid character profile in save package.")
         profile = default_character_profile() | profile
-        for field in ("Factions", "Reputations", "Resistances", "Titles"):
+        for field in LIST_FIELDS:
             if not isinstance(profile.get(field), list) or not all(
                 isinstance(item, str) for item in profile[field]
             ):
                 raise ValueError(f"Invalid profile list: {field}.")
+        for field in SCALAR_FIELDS:
+            if not isinstance(profile.get(field, ""), (str, int, float)):
+                raise ValueError(f"Invalid profile field: {field}.")
         portrait_name = os.path.basename(str(profile.get("portrait", "")))
         profile["portrait"] = portrait_name
         portrait_member = "portrait/" + portrait_name if portrait_name else None
@@ -267,7 +281,6 @@ def restore_character_save(content: bytes, base_dir: str = ".") -> list:
     backups = {}
     created = set()
     old_portraits = []
-    profile_path = os.path.join(base_dir, "characterfiles", "character_profile.json")
     portrait_dir = os.path.join(base_dir, "characterfiles", "portraits")
 
     if os.path.isdir(portrait_dir):
@@ -276,6 +289,11 @@ def restore_character_save(content: bytes, base_dir: str = ".") -> list:
             for name in os.listdir(portrait_dir)
             if name.startswith("character_portrait.")
         ]
+
+    for old_path in old_portraits:
+        if os.path.isfile(old_path):
+            with open(old_path, "rb") as file:
+                backups[old_path] = file.read()
 
     try:
         for relative, data in files.items():
