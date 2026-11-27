@@ -1366,8 +1366,9 @@ with restore_col:
             st.session_state["csv_data"] = None
             st.session_state["show_history"] = False
             st.session_state["rendering_log"] = False
+            # The package already restores repeats.json and points.json;
+            # reload them directly instead of recomputing the saved TP balance.
             tracker = GachaHistoryTracker()
-            tracker.load_from_log(st.session_state["log"])
             st.session_state["profile_widget_generation"] += 1
             st.success(
                 f"Character save restored: {len(restored_rows)} pull(s) loaded."
