@@ -73,7 +73,7 @@ def _atomic_write_json(data: dict, path: str) -> None:
             delete=False, suffix=".tmp"
         ) as file:
             json.dump(data, file, ensure_ascii=False, indent=2)
-            file.write("\\n")
+            file.write("\n")
             temp_path = file.name
         os.replace(temp_path, path)
     finally:
@@ -163,4 +163,4 @@ def multiline_to_list(value: str) -> list[str]:
 
 
 def list_to_multiline(value: list[str]) -> str:
-    return "\\n".join(value)
+    return "\n".join(value)
