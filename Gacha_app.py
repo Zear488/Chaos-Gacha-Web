@@ -62,6 +62,7 @@ def load_csv_data(content: str):
         st.session_state["log"] = [
             strip_import_metadata(row) for row in imported_rows
         ]
+        st.session_state["latest_pull_results"] = []
         sync_roll_instances(imported_rows)
         tracker.load_from_log(st.session_state["log"])
 
@@ -98,6 +99,7 @@ with st.sidebar.expander("📘 CSV Format Help"):
 # Borrar historial y archivos JSON asociados
 if st.sidebar.button("🗑️ Clear History"):
     st.session_state["log"] = []
+    st.session_state["latest_pull_results"] = []
     st.session_state["csv_data"] = None
     st.session_state["show_history"] = False
     st.session_state["rendering_log"] = False
@@ -451,51 +453,52 @@ if "last_click_time" not in st.session_state:
 # Tiempo mínimo entre clics (en segundos)
 CLICK_DELAY = 0.2
 
-# 🎰 Roll 
+def execute_pull_batch(number_of_pulls):
+    """Run pulls and persist state; result rendering happens in a stable page slot."""
+    st.session_state["csv_data"] = None
+    results = perform_gacha_draw(
+        mode, min_val, avg, max_val,
+        num_pulls=number_of_pulls,
+        boost_transcendent=True,
+    )
+    new_entries = [result for result in results if result]
+    st.session_state["latest_pull_results"] = new_entries
+    st.session_state["log"].extend(new_entries)
+    tracker.load_from_log(st.session_state["log"])
+    sync_roll_instances(st.session_state["log"])
+    os.makedirs("logs", exist_ok=True)
+    pd.DataFrame(st.session_state["log"]).to_csv(
+        "logs/gacha_history.csv", index=False, encoding="utf-8-sig"
+    )
+    st.session_state["show_curve_analysis"] = False
+
+
+# Keep one persistent result container in the page tree. Previously, the
+# container and a variable number of result blocks existed only inside the
+# button callback; the next rerun removed that transient subtree. Rendering
+# from session state at a fixed location avoids that conditional lifecycle.
+if "latest_pull_results" not in st.session_state:
+    st.session_state["latest_pull_results"] = []
+
 if st.button("🎰 Roll", type="primary"):
     now = time.time()
     if now - st.session_state["last_click_time"] >= CLICK_DELAY:
         st.session_state["last_click_time"] = now
-        st.session_state["csv_data"] = None  # 🚫 Evitar generación automática
-        results = perform_gacha_draw(mode, min_val, avg, max_val, num_pulls=1, boost_transcendent=True)
-        new_entries = []
-        result_container = st.container()
-        with result_container:
-            for result in results:
-                if result:
-                    display_result(result, min_val, max_val)
-                    new_entries.append(result)
-        st.session_state["log"].extend(new_entries)
-        tracker.load_from_log(st.session_state["log"])
-        sync_roll_instances(st.session_state["log"])
-        df_auto = pd.DataFrame(st.session_state["log"])
-        df_auto.to_csv("logs/gacha_history.csv", index=False, encoding="utf-8-sig")
-        st.session_state["show_curve_analysis"] = False
+        execute_pull_batch(1)
     else:
         st.warning("⏳ Please wait a moment before clicking again.")
 
-# 🎲 Multi-Roll 
 if st.button("🎲 Multi-Roll"):
     now = time.time()
     if now - st.session_state["last_click_time"] >= CLICK_DELAY:
         st.session_state["last_click_time"] = now
-        st.session_state["csv_data"] = None  # 🚫 Evitar generación automática
-        results = perform_gacha_draw(mode, min_val, avg, max_val, num_pulls=pull_count, boost_transcendent=True)
-        new_entries = []
-        result_container = st.container()
-        with result_container:
-            for result in results:
-                if result:
-                    display_result(result, min_val, max_val)
-                    new_entries.append(result)
-        st.session_state["log"].extend(new_entries)
-        tracker.load_from_log(st.session_state["log"])
-        sync_roll_instances(st.session_state["log"])
-        df_auto = pd.DataFrame(st.session_state["log"])
-        df_auto.to_csv("logs/gacha_history.csv", index=False, encoding="utf-8-sig")
-        st.session_state["show_curve_analysis"] = False
+        execute_pull_batch(pull_count)
     else:
         st.warning("⏳ Please wait a moment before clicking again.")
+
+with st.container():
+    for result in st.session_state["latest_pull_results"]:
+        display_result(result, min_val, max_val)
 
 
 # Mostrar historial y permitir descarga solo después de al menos una tirada
