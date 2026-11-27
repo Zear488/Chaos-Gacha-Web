@@ -18,6 +18,7 @@ from character.parser import parse_stats, parse_resistances
 from character.progression import (
     STAT_NAMES, get_level_from_pulls, get_progress_to_next_level,
     points_earned_for_level, load_character_progress, allocate_stat_points,
+    clear_character_progress,
 )
 import numpy as np
 import math
@@ -96,6 +97,7 @@ if st.sidebar.button("🗑️ Clear History"):
     st.session_state["rendering_log"] = False
     tracker.clear_all()
     clear_inventory()
+    clear_character_progress()
 
     # Remove the persisted raw gacha history as well as the JSON state.
     history_path = os.path.join("logs", "gacha_history.csv")
