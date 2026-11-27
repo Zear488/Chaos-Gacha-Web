@@ -1049,4 +1049,66 @@ Alcance de esta etapa: exportación e importación del historial CSV.
    siguiente apartado independiente de la bitácora.
 5. Después continuar con inspección de modificadores desde el inventario.
 
+======================================================================
+17. CORRECCIONES DE INTERFAZ TRAS PRUEBA DEL CSV
+======================================================================
+
+Fecha: 26-11-2026.
+Origen: reporte del usuario al probar la corrección CSV en Streamlit.
+
+17.1 Error al cargar CSV desde el área de texto
+
+Error reportado:
+Invalid history CSV: st.session_state['manual_csv'] cannot be modified
+after the widget with that key is instantiated.
+
+Causa:
+- load_csv_data() intentaba asignar una cadena vacía a
+  st.session_state["manual_csv"] después de crear el text_area con key
+  "manual_csv".
+- Streamlit no permite modificar desde el flujo normal la clave de estado
+  que pertenece a un widget ya instanciado.
+
+Corrección en código:
+- Se eliminó la escritura sobre st.session_state["manual_csv"].
+- La carga ahora se realiza de forma explícita con botones separados para
+  archivo subido y texto pegado.
+- Se conserva el contenido del área de texto después de cargarlo; el
+  usuario puede editarlo o reemplazarlo manualmente.
+- La función load_csv_data() devuelve un booleano de resultado y ya no
+  modifica el estado interno del widget.
+
+17.2 El inventario se cerraba al seleccionar una tirada
+
+Problema reportado:
+- Al abrir Individual Roll Inventory y seleccionar una instancia, el
+  contenedor se cerraba durante el rerun normal de Streamlit.
+- El usuario quiere decidir cuándo abrirlo y cerrarlo, sin que seleccionar
+  una tirada cierre el inventario.
+
+Corrección en código:
+- Se sustituyó el st.expander por un checkbox persistente que controla la
+  visibilidad del inventario.
+- La selección de una instancia y las acciones de equipar/desequipar ya no
+  dependen del estado temporal de un expander.
+- El usuario controla explícitamente cuándo mostrar u ocultar el inventario.
+
+17.3 Reequipar instancias importadas
+
+- Se añadió una prueba unitaria que importa una instancia en estado stored,
+  conserva sus modificadores y comprueba que equip_roll() puede equiparla.
+- No se modificó la regla que impide equipar instancias descartadas.
+- Las instancias que ya llegan con status equipped se mantienen equipadas;
+  para volver a seleccionar su estado se deben desequipar desde la UI.
+
+17.4 Estado de validación
+
+- Cambios aplicados a Gacha_app.py y tests/test_history_csv.py.
+- No se han ejecutado las pruebas automatizadas ni una prueba interactiva
+  de Streamlit en esta sesión.
+- Debe probarse: pegar CSV -> Load pasted CSV -> abrir inventario ->
+  seleccionar stored -> equipar -> seleccionar otra instancia; el
+  inventario debe permanecer abierto.
+- PR #7 continúa sin fusionarse hasta validar el ciclo real.
+
 FIN DE LA BITÁCORA

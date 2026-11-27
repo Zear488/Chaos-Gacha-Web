@@ -45,31 +45,32 @@ def load_csv_data(content: str):
         imported_rows = parse_history_csv(content)
         if not imported_rows:
             st.sidebar.warning("The CSV contains no pull records.")
-            return
+            return False
 
-        # Preserve instance metadata in session state; strip it for gacha
-        # repeat/TP reconstruction because it is not part of a pull itself.
-        st.session_state["log"] = imported_rows
-        sync_roll_instances(imported_rows)
-        tracker.load_from_log([
+        st.session_state["log"] = [
             strip_import_metadata(row) for row in imported_rows
-        ])
+        ]
+        sync_roll_instances(imported_rows)
+        tracker.load_from_log(st.session_state["log"])
 
         st.sidebar.success(
             f"History loaded successfully: {len(imported_rows)} pull(s) restored."
         )
-        st.session_state["manual_csv"] = ""
+        return True
     except Exception as error:
         st.sidebar.error(f"Invalid history CSV: {error}")
+        return False
 
-# Opción 1: archivo subido
-if uploaded_file:
-    content = uploaded_file.read().decode("utf-8-sig")
-    load_csv_data(content)
+# Loading is explicit and performed once per click. Never assign to the
+# text_area's own session_state key after its widget has been instantiated.
+if uploaded_file is not None:
+    uploaded_content = uploaded_file.getvalue().decode("utf-8-sig")
+    if st.sidebar.button("Load uploaded CSV", key="load_uploaded_history"):
+        load_csv_data(uploaded_content)
 
-# Opción 2: texto pegado manualmente
-elif manual_csv.strip():
-    load_csv_data(manual_csv.strip())
+if manual_csv.strip():
+    if st.sidebar.button("Load pasted CSV", key="load_pasted_history"):
+        load_csv_data(manual_csv.strip())
 
 # Ayuda visual
 with st.sidebar.expander("📘 CSV Format Help"):
@@ -875,7 +876,15 @@ if st.session_state["show_curve_analysis"]:
 
 # ------------------ PERSISTENT ROLL INVENTORY ------------------
 st.markdown("---")
-with st.expander("🎒 Individual Roll Inventory", expanded=False):
+if "show_individual_inventory_toggle" not in st.session_state:
+    st.session_state["show_individual_inventory_toggle"] = False
+
+st.checkbox(
+    "🎒 Individual Roll Inventory",
+    key="show_individual_inventory_toggle",
+)
+
+if st.session_state["show_individual_inventory_toggle"]:
     try:
         inventory_instances = get_inventory()
         if inventory_instances:
