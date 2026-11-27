@@ -25,6 +25,7 @@ from character.profile_manager import (
     load_character_profile, save_character_profile, get_portrait_path,
     multiline_to_list, list_to_multiline,
 )
+from logic.character_save import create_character_save, restore_character_save
 import numpy as np
 import math
 import altair as alt
@@ -1254,14 +1255,16 @@ portrait_path = get_portrait_path(saved_profile)
 if portrait_path:
     st.image(portrait_path, caption="Current character portrait", width=220)
 
-# Seed form state only before its widgets are created.
+# Versioned keys let a restored package refresh form fields on rerun
+# without mutating Streamlit widget state after widget creation.
+profile_widget_generation = st.session_state.setdefault("profile_widget_generation", 0)
 for field in SCALAR_FIELDS:
-    widget_key = f"profile_{field.lower()}"
+    widget_key = f"profile_{field.lower()}_{profile_widget_generation}"
     if widget_key not in st.session_state:
         st.session_state[widget_key] = saved_profile.get(field, "")
 
 for field in LIST_FIELDS:
-    widget_key = f"profile_{field.lower()}"
+    widget_key = f"profile_{field.lower()}_{profile_widget_generation}"
     if widget_key not in st.session_state:
         st.session_state[widget_key] = list_to_multiline(
             saved_profile.get(field, [])
@@ -1272,42 +1275,46 @@ with st.form("character_profile_form"):
         "Narrative-only information. These fields do not affect gacha pulls "
         "or the character's generated stat modifiers."
     )
-    st.text_input("Name", key="profile_name")
+    st.text_input("Name", key="profile_name_{profile_widget_generation}")
     profile_cols = st.columns(2)
     with profile_cols[0]:
-        st.text_input("Race", key="profile_race")
-        st.text_input("Class", key="profile_class")
-        st.text_input("Lineage", key="profile_lineage")
-        st.text_input("Talent", key="profile_talent")
-        st.text_input("Element", key="profile_element")
-        st.text_input("Age", key="profile_age")
-        st.text_input("Gender", key="profile_gender")
-        st.text_input("Origin", key="profile_origin")
+        st.text_input("Race", key="profile_race_{profile_widget_generation}")
+        st.text_input("Class", key="profile_class_{profile_widget_generation}")
+        st.text_input("Lineage", key="profile_lineage_{profile_widget_generation}")
+        st.text_input("Talent", key="profile_talent_{profile_widget_generation}")
+        st.text_input("Element", key="profile_element_{profile_widget_generation}")
+        st.text_input("Age", key="profile_age_{profile_widget_generation}")
+        st.text_input("Gender", key="profile_gender_{profile_widget_generation}")
+        st.text_input("Origin", key="profile_origin_{profile_widget_generation}")
     with profile_cols[1]:
-        st.text_area("Factions (one per line)", key="profile_factions", height=90)
-        st.text_area("Reputations (one per line)", key="profile_reputations", height=90)
-        st.text_area("Resistances (one per line)", key="profile_resistances", height=90)
-        st.text_area("Titles (one per line)", key="profile_titles", height=90)
+        st.text_area("Factions (one per line)", key="profile_factions_{profile_widget_generation}", height=90)
+        st.text_area("Reputations (one per line)", key="profile_reputations_{profile_widget_generation}", height=90)
+        st.text_area("Resistances (one per line)", key="profile_resistances_{profile_widget_generation}", height=90)
+        st.text_area("Titles (one per line)", key="profile_titles_{profile_widget_generation}", height=90)
 
-    st.text_area("Appearance", key="profile_appearance")
-    st.text_area("Personality", key="profile_personality")
-    st.text_area("Background", key="profile_background")
-    st.text_area("Notes", key="profile_notes")
+    st.text_area("Appearance", key="profile_appearance_{profile_widget_generation}")
+    st.text_area("Personality", key="profile_personality_{profile_widget_generation}")
+    st.text_area("Background", key="profile_background_{profile_widget_generation}")
+    st.text_area("Notes", key="profile_notes_{profile_widget_generation}")
     uploaded_portrait = st.file_uploader(
         "Character portrait (PNG, JPG or WEBP; max 10 MB)",
         type=["png", "jpg", "jpeg", "webp"],
-        key="profile_portrait_upload",
+        key=f"profile_portrait_upload_{profile_widget_generation}",
     )
     save_profile_clicked = st.form_submit_button("💾 Save Character Profile")
 
 if save_profile_clicked:
     profile_to_save = {
-        field: st.session_state.get(f"profile_{field.lower()}", "")
+        field: st.session_state.get(
+            f"profile_{field.lower()}_{profile_widget_generation}", ""
+        )
         for field in SCALAR_FIELDS
     }
     for field in LIST_FIELDS:
         profile_to_save[field] = multiline_to_list(
-            st.session_state.get(f"profile_{field.lower()}", "")
+            st.session_state.get(
+                f"profile_{field.lower()}_{profile_widget_generation}", ""
+            )
         )
     try:
         save_character_profile(
@@ -1319,6 +1326,55 @@ if save_profile_clicked:
         st.rerun()
     except (OSError, ValueError, TypeError) as error:
         st.error(f"Could not save character profile: {error}")
+
+st.subheader("📦 Portable Character Save")
+
+save_col, restore_col = st.columns(2)
+with save_col:
+    if st.button("Prepare Full Character Save", key="prepare_full_character_save"):
+        try:
+            package_bytes = create_character_save(
+                st.session_state.get("log", []),
+                get_inventory(),
+            )
+            st.download_button(
+                "📥 Download Character Save (.zip)",
+                data=package_bytes,
+                file_name="chaos_gacha_character_save.zip",
+                mime="application/zip",
+                key="download_full_character_save",
+            )
+        except (OSError, ValueError, TypeError) as error:
+            st.error(f"Could not create character save: {error}")
+
+with restore_col:
+    uploaded_package = st.file_uploader(
+        "Restore full character save (.zip)",
+        type=["zip"],
+        key="restore_character_save_upload",
+    )
+    if st.button(
+        "Restore Character Save",
+        disabled=uploaded_package is None,
+        key="restore_character_save_button",
+    ):
+        try:
+            restored_rows = restore_character_save(uploaded_package.getvalue())
+            st.session_state["log"] = [
+                strip_import_metadata(row) for row in restored_rows
+            ]
+            st.session_state["csv_data"] = None
+            st.session_state["show_history"] = False
+            st.session_state["rendering_log"] = False
+            tracker = GachaHistoryTracker()
+            tracker.load_from_log(st.session_state["log"])
+            st.session_state["profile_widget_generation"] += 1
+            st.success(
+                f"Character save restored: {len(restored_rows)} pull(s) loaded."
+            )
+            st.rerun()
+        except (OSError, ValueError, TypeError) as error:
+            st.error(f"Could not restore character save: {error}")
 
 if st.button("🧪 Generate Character From Gacha"):
     report = ValidationReport()
