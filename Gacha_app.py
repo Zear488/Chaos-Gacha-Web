@@ -249,8 +249,8 @@ def perform_gacha_draw(mode, min_val, avg, max_val, num_pulls=1, boost_transcend
                     notes.append("🔁 Repeated — +1 TP")
 
                 if bonus_triggered and boost_star_chance > 0:
-                    notes.append(f"✨ Boosted Star Bonus — -{tp} TP")
-                    tracker.spend_points(tp)
+                    if tracker.spend_points(tp):
+                        notes.append(f"✨ Boosted Star Bonus — -{tp} TP")
 
                 if notes:
                     pull_data["Notes"] = " | ".join(notes)
