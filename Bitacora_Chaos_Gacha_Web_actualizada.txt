@@ -1676,7 +1676,9 @@ Base: feature/character-profile-and-portrait (PR #13, borrador).
 - La restauración prepara archivos temporales, conserva respaldos y
   revierte los archivos reemplazados si ocurre un error durante el cambio.
 - Después de restaurar, la interfaz reconstruye el historial de sesión
-  y el tracker recalcula TP desde Notes y el ledger de descartes.
+  y crea una nueva instancia del tracker para cargar exactamente el saldo
+  TP y el ledger incluidos en el paquete, sin recalcular ni alterar el
+  saldo guardado a partir de Notes.
 
 24.3 Interfaz
 
