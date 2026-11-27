@@ -6,6 +6,7 @@ character stats or level back into the gacha draw engine.
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 
@@ -28,13 +29,11 @@ def pulls_required_for_level(level: int) -> int:
 
 
 def get_level_from_pulls(pull_count: int) -> int:
-    """Resolve the current level from unique pull-history rows."""
+    """Resolve the current level from individual pull-history rows."""
     if isinstance(pull_count, bool) or not isinstance(pull_count, int) or pull_count < 0:
         raise ValueError("El número de tiradas debe ser un entero no negativo.")
-    level = 1
-    while pulls_required_for_level(level + 1) <= pull_count:
-        level += 1
-    return level
+    # Solve L*(L+1)/2 - 1 <= pull_count using integer arithmetic.
+    return max(1, (math.isqrt(8 * pull_count + 9) - 1) // 2)
 
 
 def get_progress_to_next_level(pull_count: int) -> dict:
