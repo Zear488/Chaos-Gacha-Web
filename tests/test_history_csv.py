@@ -3,7 +3,7 @@ import tempfile
 import unittest
 
 from logic.history_csv import parse_history_csv, serialize_history_csv
-from logic.roll_manager import sync_roll_instances, get_inventory
+from logic.roll_manager import sync_roll_instances, get_inventory, equip_roll
 
 
 class HistoryCsvRoundTripTests(unittest.TestCase):
@@ -65,6 +65,42 @@ class HistoryCsvRoundTripTests(unittest.TestCase):
             self.assertEqual(saved["modifiers"], original["modifiers"])
             self.assertTrue(saved["modifiers_generated"])
             self.assertEqual(saved["modifier_generation_version"], 1)
+
+
+    def test_imported_stored_roll_can_be_equipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            inventory_path = os.path.join(directory, "inventory.json")
+            pull = {
+                "Type": "Skill",
+                "Element": "Imported Skill",
+                "Rarity": "4.50",
+                "Tier": "Elite",
+                "LuckValue": 40.0,
+                "Luck": "40.00%",
+                "Description": "Imported description",
+                "Color": "#1172d9",
+                "Notes": "",
+            }
+            original = sync_roll_instances(
+                [pull], path=os.path.join(directory, "source.json")
+            )[0]
+            original["modifiers"] = [
+                {"stat": "STR", "kind": "flat", "value": 5}
+            ]
+            original["modifiers_generated"] = True
+            csv_text = serialize_history_csv([pull], [original])
+
+            imported = parse_history_csv(csv_text)
+            sync_roll_instances(imported, path=inventory_path)
+            equipped = equip_roll(
+                original["id"], level=1, path=inventory_path
+            )
+
+            self.assertEqual(equipped["status"], "equipped")
+            self.assertEqual(
+                get_inventory(inventory_path)[0]["modifiers"],
+                original["modifiers"],
+            )
 
     def test_legacy_csv_without_optional_fields_is_accepted(self):
         content = (
