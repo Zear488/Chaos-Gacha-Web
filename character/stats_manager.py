@@ -1,7 +1,7 @@
-"""Combine legacy descriptive stats with persistent random roll modifiers.
+"""Combine narrative character stats with modifiers from equipped gacha rolls.
 
-Legacy #STATS bonuses remain additive and are not amplified by star bonuses.
-Random flat values are added before the sum of random percentages is applied.
+Star bonuses are a global multiplier on every final character stat. They do
+not influence gacha probabilities or modify the pull-generation process.
 """
 from __future__ import annotations
 
@@ -58,11 +58,11 @@ class StatsManager:
         self.star_count = min(count, 4)
 
     def finalize(self, star_count=None):
-        """Return final stats; star bonus affects only the random contribution."""
+        """Return all character stats with a global bonus per equipped star roll."""
         if star_count is not None:
             self.set_star_count(star_count)
 
-        star_multiplier = 1 + 0.10 * self.star_count
+        star_multiplier = 1 + 0.05 * self.star_count
         final = {}
         for key, base_value in self.base.items():
             legacy = self.mods.get(key, 0)
@@ -71,5 +71,5 @@ class StatsManager:
             random_contribution = (
                 (base_value + flat) * (1 + percent / 100) - base_value
             )
-            final[key] = base_value + legacy + random_contribution * star_multiplier
+            final[key] = (base_value + legacy + random_contribution) * star_multiplier
         return final

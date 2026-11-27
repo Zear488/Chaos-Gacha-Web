@@ -1111,4 +1111,146 @@ Corrección en código:
   inventario debe permanecer abierto.
 - PR #7 continúa sin fusionarse hasta validar el ciclo real.
 
+======================================================================
+18. ACLARACIONES Y CORRECCIONES: TP, CLEAR HISTORY Y BONUS GLOBAL
+======================================================================
+
+Fecha: 26-11-2026.
+Origen: observaciones del usuario después de validar el CSV completo.
+
+18.1 TP gastados al activar Boosted Star Bonus
+
+Problema:
+- El usuario observó que el saldo TP no se reducía de forma persistente
+  cuando una tirada obtenía el bonus de estrella pagado con TP.
+
+Causa localizada:
+- GachaHistoryTracker.load_from_log() reconstruía el saldo leyendo el
+  importe gastado desde Notes con la expresión regular
+  r"-\s*(\d+)\s*TP".
+- Esa expresión solo aceptaba números enteros.
+- El coste de la mejora puede ser fraccionario, ya que los TP por
+  repetidos/descarte usan decimales. Ejemplo: "-5.025 TP".
+- En consecuencia, el descuento podía aparecer en Notes, pero al
+  reconstruir el saldo desde el historial no se restaba el importe
+  fraccionario y los puntos parecían reaparecer.
+
+Corrección aplicada:
+- La expresión ahora reconoce importes decimales (entero o decimal).
+- La reconstrucción resta el coste como float y conserva redondeo a
+  seis decimales en el saldo final.
+- Se añadió una prueba que reconstruye el saldo con +5 TP de repetidos,
+  +0.025 TP de descarte y -5.025 TP de bonus, cuyo resultado correcto
+  es 0.000 TP.
+
+Nota de diseño:
+- La activación pagada debe registrar el coste exacto consumido.
+- No basta con escribir una nota visual: el saldo persistente reconstruido
+  debe reflejar la resta real.
+- La probabilidad base de estrella no debe confundirse con el bonus
+  incrementado mediante TP.
+
+18.2 Clear History también elimina logs/gacha_history.csv
+
+Problema:
+- El botón Clear History limpiaba session_state, repeats.json,
+  points.json e inventory.json, pero no eliminaba logs/gacha_history.csv.
+
+Corrección aplicada:
+- Clear History elimina logs/gacha_history.csv si existe.
+- Limpia el historial en session_state, el CSV de descarga temporal,
+  los indicadores de visualización del historial, el inventario, repeats
+  y el estado/ledger de TP.
+- Muestra confirmación en la interfaz.
+
+Criterio:
+Después de Clear History no debe quedar el CSV anterior para que
+Character Builder lo vuelva a cargar accidentalmente. Esta acción
+representa borrar el historial completo, el inventario y los TP, no solo
+ocultar las filas de la interfaz.
+
+18.3 Aclaración de propósito: Character Builder es descriptivo
+
+Confirmación del usuario:
+- Chaos Gacha Web se utiliza para generar y documentar elementos que
+  después se integran en una historia/roleo.
+- No se busca un videojuego funcional ni un simulador de combate.
+- Las estadísticas de la hoja Character Builder son datos descriptivos
+  del personaje para la historia.
+- STR, AGI, INT, WIS, CON, LCK, Mana, Vitality, Defensa y Ataque no
+  deben modificar probabilidades, resultados ni calidad de los pulls.
+- No implementar combate, daño, economía jugable, misiones ni lógica de
+  habilidades activables.
+- LCK dentro de Character Builder es una estadística narrativa, no una
+  entrada para el motor gacha.
+- LuckValue/Luck generado por el propio gacha es un dato distinto: sigue
+  formando parte de los resultados y de la fórmula ya acordada para
+  generar magnitudes/cantidad de modificadores. No confundirlo con LCK
+  del personaje.
+- TP es la única estadística/recurso del personaje que el usuario ha
+  autorizado a intervenir en la tirada, a través del aumento de
+  probabilidad del bonus de estrella.
+
+Regla de arquitectura:
+Character Builder puede leer modificadores persistidos y mostrar
+estadísticas resultantes para el personaje; nunca debe enviar sus
+estadísticas de vuelta al motor gacha.
+
+18.4 Bonus de estrella: alcance global
+
+Diseño anterior:
+- El bonus de estrella aumentaba únicamente la contribución de los
+  modificadores aleatorios, +10% por estrella equipada, hasta cuatro.
+
+Nueva aclaración del usuario:
+- Una tirada con bonus de estrella debe aumentar de forma general las
+  estadísticas, sin depender de cuál estadística o tipo de modificador
+  haya obtenido.
+- El usuario planteó considerar reducir el incremento de +10% a +5%.
+
+Decisión de implementación adoptada en esta rama:
+- +5% global por cada instancia con estrella que esté equipada.
+- El multiplicador se aplica a todas las estadísticas finales del
+  Character Builder, incluyendo estadísticas base, modificaciones
+  descriptivas #STATS y modificadores aleatorios.
+- La cantidad se suma linealmente: 1 estrella = +5%; 2 = +10%;
+  3 = +15%; 4 o más = máximo +20%.
+- Las estrellas se cuentan por instancias equipadas; una instancia
+  almacenada o descartada no aporta bonus.
+- La detección de estrella sigue usando el prefijo ★ y/o Notes sin
+  doble conteo de la misma instancia.
+- El bonus global se aplica a las estadísticas del personaje, no a
+  Resistances ni a campos narrativos, salvo futura decisión explícita.
+- Este multiplicador solo afecta el resultado descriptivo del
+  Character Builder; no altera pulls, tiers, LuckValue ni probabilidades.
+
+Fórmula:
+S_final = (S_base + D + contribución_random) * (1 + 0.05 * N)
+N = número de instancias equipadas con estrella, limitado a 4.
+
+Cambios de código:
+- character/stats_manager.py aplica ahora el multiplicador a toda la
+  estadística final.
+- tests/test_stats_manager_modifiers.py comprueba que incluso una
+  estadística sin modificadores aleatorios (Mana) recibe el bonus global.
+- Se actualizaron las expectativas de la prueba de dos estrellas.
+
+18.5 Estado de validación
+
+- Los cambios se aplicaron en la rama fix/tp-spending-and-clear-history,
+  creada desde main.
+- Se modificaron logic/tracker.py, Gacha_app.py, character/stats_manager.py
+  y pruebas asociadas.
+- No se ejecutó la suite automatizada ni una prueba manual en Streamlit.
+- Debe comprobarse:
+  1. Activar una estrella con TP fraccionarios y recargar la app.
+  2. Confirmar que el saldo queda descontado y no reaparece.
+  3. Confirmar que Clear History elimina logs/gacha_history.csv y los
+     archivos de estado asociados.
+  4. Equipar una instancia con ★ sin modificadores y comprobar que todas
+     las estadísticas reciben +5%.
+  5. Equipar hasta cuatro instancias con ★ y comprobar el límite +20%.
+  6. Verificar que LCK de Character Builder no cambia las probabilidades
+     ni la magnitud de tiradas futuras.
+
 FIN DE LA BITÁCORA

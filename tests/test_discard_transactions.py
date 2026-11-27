@@ -74,6 +74,31 @@ class DiscardTransactionTests(unittest.TestCase):
         self.tracker.load_from_log([])
         self.assertEqual(self.tracker.get_points(), 0.009)
 
+
+
+    def test_spend_points_persists_fractional_cost(self):
+        self.tracker.points["points"] = 5.025
+        self.tracker._save_json(self.points_path, self.tracker.points)
+
+        self.assertTrue(self.tracker.spend_points(5.025))
+        reloaded = GachaHistoryTracker()
+        self.assertEqual(reloaded.get_points(), 0.0)
+
+    def test_fractional_star_spending_survives_history_reload(self):
+        self.tracker.award_discard_points("seed-roll", "Elite")  # +0.025 TP
+        history = [
+            {"Type": "Skill", "Element": f"Repeated {index}", "Notes": "Repeated — +1 TP"}
+            for index in range(5)
+        ]
+        history.append({
+            "Type": "Ability",
+            "Element": "★ Star Ability",
+            "Notes": "✨ Boosted Star Bonus — -5.025 TP",
+        })
+
+        self.tracker.load_from_log(history)
+        self.assertEqual(self.tracker.get_points(), 0.0)
+
     def test_corrupt_points_file_is_not_overwritten(self):
         with open(self.points_path, "w", encoding="utf-8") as file:
             file.write("{ broken")
