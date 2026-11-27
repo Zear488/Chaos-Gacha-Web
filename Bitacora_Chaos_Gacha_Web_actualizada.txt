@@ -1637,4 +1637,87 @@ Base: feature/pull-based-character-progression (PR #12, borrador).
 - La importación CSV simple seguirá siendo solo historial de pulls; el
   paquete completo será el mecanismo para trasladar todo el personaje.
 
+======================================================================
+24. PAQUETE PORTABLE DE GUARDADO Y RESTAURACIÓN
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/portable-character-save.
+Base: feature/character-profile-and-portrait (PR #13, borrador).
+
+24.1 Formato del paquete
+
+- Se añadió logic/character_save.py.
+- El formato es un ZIP versionado con manifest.json.
+- Incluye:
+  - gacha_history.csv completo con IDs, estados y modificadores.
+  - gacha_log/inventory.json.
+  - gacha_log/points.json, incluido discard_transactions.
+  - gacha_log/repeats.json.
+  - gacha_log/character_progress.json.
+  - characterfiles/character_profile.json.
+  - characterfiles/stats.json.
+  - portrait/character_portrait.ext cuando existe un retrato.
+- El paquete es independiente de cuentas, nube o sincronización.
+- La exportación usa el historial actual y el inventario persistido.
+
+24.2 Validación antes de restaurar
+
+- Se valida ZIP, manifest y versión.
+- Se validan columnas del CSV y unicidad de IDs.
+- Cada ID del historial debe existir en inventory.json.
+- El estado del CSV debe coincidir con el estado de inventario.
+- Los datos de la tirada y sus modificadores deben coincidir entre CSV
+  e inventario.
+- Se validan estructura de TP y ledger, repeticiones, progresión,
+  perfil, estadísticas y retrato.
+- Se rechazan rutas inseguras y archivos inesperados.
+- Tamaño máximo del paquete: 50 MB; retrato máximo: 10 MB.
+- La restauración prepara archivos temporales, conserva respaldos y
+  revierte los archivos reemplazados si ocurre un error durante el cambio.
+- Después de restaurar, la interfaz reconstruye el historial de sesión
+  y crea una nueva instancia del tracker para cargar exactamente el saldo
+  TP y el ledger incluidos en el paquete, sin recalcular ni alterar el
+  saldo guardado a partir de Notes.
+
+24.3 Interfaz
+
+- Se añadió "Prepare Full Character Save" y descarga ZIP.
+- Se añadió "Restore Character Save" para importar un paquete completo.
+- La restauración refresca los campos del perfil sin modificar claves
+  de widgets ya instanciadas.
+- CSV simple sigue siendo el formato para historial; ZIP es el formato
+  para trasladar el personaje completo.
+
+24.4 Pruebas y validación
+
+- Se añadió tests/test_character_save.py.
+- Cubre exportación/restauración de IDs, estados, perfil, retrato,
+  progreso, TP y rechazo de un archivo que no sea ZIP sin alterar los
+  archivos locales.
+- No se ejecutaron tests automatizados ni Streamlit en esta sesión.
+- Prueba manual pendiente:
+  1. Crear personaje con pulls repetidos, equipados y descartados.
+  2. Asignar puntos de nivel y completar perfil.
+  3. Subir un retrato.
+  4. Exportar ZIP.
+  5. Limpiar o cambiar datos locales.
+  6. Restaurar ZIP.
+  7. Confirmar IDs, modificadores, estados, TP, nivel, puntos,
+     estadísticas base, perfil y retrato.
+  8. Intentar restaurar un ZIP alterado y confirmar que los datos
+     existentes no se sobrescriben.
+
+24.5 Estado Git y siguiente validación
+
+- PR #11: inspección de modificadores, borrador.
+- PR #12: progresión narrativa por tiradas, borrador encadenado a #11.
+- PR #13: perfil y retrato, borrador encadenado a #12.
+- PR #14: guardado portable, borrador encadenado a #13.
+- Orden de integración previsto: #11, #12, #13 y #14.
+- Ningún PR de esta cadena debe fusionarse sin autorización explícita.
+- La suite automatizada no se ha ejecutado; no afirmar que pasó.
+- El repositorio no devolvió ejecuciones de GitHub Actions para los
+  commits revisados.
+
 FIN DE LA BITÁCORA
