@@ -86,8 +86,18 @@ with st.sidebar.expander("📘 CSV Format Help"):
 # Borrar historial y archivos JSON asociados
 if st.sidebar.button("🗑️ Clear History"):
     st.session_state["log"] = []
+    st.session_state["csv_data"] = None
+    st.session_state["show_history"] = False
+    st.session_state["rendering_log"] = False
     tracker.clear_all()
     clear_inventory()
+
+    # Remove the persisted raw gacha history as well as the JSON state.
+    history_path = os.path.join("logs", "gacha_history.csv")
+    if os.path.exists(history_path):
+        os.remove(history_path)
+
+    st.sidebar.success("Gacha history, inventory, and TP data cleared.")
 
 # Mostrar puntos actuales
 st.sidebar.markdown(f"⭐ Transcendent Points: `{tracker.get_points():.3f}`")
