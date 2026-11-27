@@ -962,6 +962,43 @@ if st.session_state["show_individual_inventory_toggle"]:
                 )
                 column.metric(category, f"{category_count}/{slot_limit}")
 
+            # At-a-glance equipment overview: display the actual equipped
+            # instances, not just occupied slot counts.
+            equipped_instances = [
+                instance for instance in inventory_instances
+                if instance.get("status", "stored") == "equipped"
+            ]
+            with st.expander(
+                f"🧰 Currently Equipped ({len(equipped_instances)})",
+                expanded=True,
+            ):
+                if equipped_instances:
+                    equipped_rows = []
+                    for instance in equipped_instances:
+                        pull = instance.get("pull", {})
+                        modifiers = instance.get("modifiers", [])
+                        modifier_summary = ", ".join(
+                            f"{item.get('stat', '?')} "
+                            f"{'+' if item.get('kind') == 'flat' else '+'}"
+                            f"{float(item.get('value', 0)):.2f}"
+                            f"{'%' if item.get('kind') == 'percent' else ''}"
+                            for item in modifiers
+                        ) or "No random modifiers"
+                        equipped_rows.append({
+                            "Category": pull.get("Type", "Unknown"),
+                            "Name": pull.get("Element", "Unknown"),
+                            "Tier": pull.get("Tier", "Unknown"),
+                            "Modifiers": modifier_summary,
+                            "Instance ID": str(instance.get("id", ""))[:8],
+                        })
+                    st.dataframe(
+                        pd.DataFrame(equipped_rows),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("No pulls are currently equipped.")
+
             selectable_instances = [
                 instance for instance in inventory_instances
                 if instance.get("status", "stored") in {"stored", "equipped"}
