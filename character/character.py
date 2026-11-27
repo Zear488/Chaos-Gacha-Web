@@ -5,6 +5,7 @@ from .validator import validate_json, validate_csv, validate_txt_block
 from .stats_manager import StatsManager
 from logic.roll_manager import get_equipped_rolls
 from .progression import load_character_progress
+from .profile_manager import load_character_profile
 
 
 def _has_star_bonus(pull):
@@ -109,8 +110,10 @@ class Character:
         self.apply_gacha_items()
         self.load_free_categories()
         final_stats = self.stats.finalize()
+        profile = load_character_profile()
 
         return {
+            "profile": profile,
             "stats": final_stats,
             "resistances": self.resistances,
             "fields": self.other_fields

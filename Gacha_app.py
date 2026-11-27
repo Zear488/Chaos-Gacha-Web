@@ -20,6 +20,11 @@ from character.progression import (
     points_earned_for_level, load_character_progress, allocate_stat_points,
     clear_character_progress,
 )
+from character.profile_manager import (
+    SCALAR_FIELDS, LIST_FIELDS, default_character_profile,
+    load_character_profile, save_character_profile, get_portrait_path,
+    multiline_to_list, list_to_multiline,
+)
 import numpy as np
 import math
 import altair as alt
@@ -1237,6 +1242,84 @@ try:
 except ValueError as error:
     st.error(f"Character progression could not be loaded: {error}")
 
+st.subheader("🧑 Character Profile")
+
+try:
+    saved_profile = load_character_profile()
+except ValueError as error:
+    st.error(f"Character profile could not be loaded: {error}")
+    saved_profile = default_character_profile()
+
+portrait_path = get_portrait_path(saved_profile)
+if portrait_path:
+    st.image(portrait_path, caption="Current character portrait", width=220)
+
+# Seed form state only before its widgets are created.
+for field in SCALAR_FIELDS:
+    widget_key = f"profile_{field.lower()}"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = saved_profile.get(field, "")
+
+for field in LIST_FIELDS:
+    widget_key = f"profile_{field.lower()}"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = list_to_multiline(
+            saved_profile.get(field, [])
+        )
+
+with st.form("character_profile_form"):
+    st.caption(
+        "Narrative-only information. These fields do not affect gacha pulls "
+        "or the character's generated stat modifiers."
+    )
+    st.text_input("Name", key="profile_name")
+    profile_cols = st.columns(2)
+    with profile_cols[0]:
+        st.text_input("Race", key="profile_race")
+        st.text_input("Class", key="profile_class")
+        st.text_input("Lineage", key="profile_lineage")
+        st.text_input("Talent", key="profile_talent")
+        st.text_input("Element", key="profile_element")
+        st.text_input("Age", key="profile_age")
+        st.text_input("Gender", key="profile_gender")
+        st.text_input("Origin", key="profile_origin")
+    with profile_cols[1]:
+        st.text_area("Factions (one per line)", key="profile_factions", height=90)
+        st.text_area("Reputations (one per line)", key="profile_reputations", height=90)
+        st.text_area("Resistances (one per line)", key="profile_resistances", height=90)
+        st.text_area("Titles (one per line)", key="profile_titles", height=90)
+
+    st.text_area("Appearance", key="profile_appearance")
+    st.text_area("Personality", key="profile_personality")
+    st.text_area("Background", key="profile_background")
+    st.text_area("Notes", key="profile_notes")
+    uploaded_portrait = st.file_uploader(
+        "Character portrait (PNG, JPG or WEBP; max 10 MB)",
+        type=["png", "jpg", "jpeg", "webp"],
+        key="profile_portrait_upload",
+    )
+    save_profile_clicked = st.form_submit_button("💾 Save Character Profile")
+
+if save_profile_clicked:
+    profile_to_save = {
+        field: st.session_state.get(f"profile_{field.lower()}", "")
+        for field in SCALAR_FIELDS
+    }
+    for field in LIST_FIELDS:
+        profile_to_save[field] = multiline_to_list(
+            st.session_state.get(f"profile_{field.lower()}", "")
+        )
+    try:
+        save_character_profile(
+            profile_to_save,
+            portrait_bytes=uploaded_portrait.getvalue() if uploaded_portrait else None,
+            portrait_filename=uploaded_portrait.name if uploaded_portrait else None,
+        )
+        st.success("Character profile saved locally.")
+        st.rerun()
+    except (OSError, ValueError, TypeError) as error:
+        st.error(f"Could not save character profile: {error}")
+
 if st.button("🧪 Generate Character From Gacha"):
     report = ValidationReport()
     char = Character()
@@ -1248,6 +1331,12 @@ if st.button("🧪 Generate Character From Gacha"):
     except (InventoryDataError, ValueError) as error:
         st.error(f"Unable to build character data: {error}")
     else:
+        st.subheader("🧑 Character Profile")
+        st.json(data["profile"])
+        saved_portrait_path = get_portrait_path(data["profile"])
+        if saved_portrait_path:
+            st.image(saved_portrait_path, caption="Character portrait", width=260)
+
         st.subheader("📌 Final Stats")
         st.json(data["stats"])
 
