@@ -175,6 +175,19 @@ def _decode_and_validate(content: bytes) -> tuple[dict, list]:
                 raise ValueError(f"Invalid inventory status for ID {roll_id}.")
             if not isinstance(instance.get("pull"), dict):
                 raise ValueError(f"Invalid pull data for ID {roll_id}.")
+            modifiers = instance.get("modifiers", [])
+            if not isinstance(modifiers, list):
+                raise ValueError(f"Invalid modifier list for ID {roll_id}.")
+            for modifier in modifiers:
+                if (
+                    not isinstance(modifier, dict)
+                    or not isinstance(modifier.get("stat"), str)
+                    or modifier.get("kind") not in {"flat", "percent"}
+                    or isinstance(modifier.get("value"), bool)
+                    or not isinstance(modifier.get("value"), (int, float))
+                    or modifier.get("value") < 0
+                ):
+                    raise ValueError(f"Invalid modifier data for ID {roll_id}.")
             inventory_by_id[roll_id] = instance
 
         seen_csv_ids = set()
@@ -209,8 +222,12 @@ def _decode_and_validate(content: bytes) -> tuple[dict, list]:
         if not isinstance(transactions, dict):
             raise ValueError("Invalid TP transaction ledger in character save.")
         for roll_id, transaction in transactions.items():
-            if not isinstance(roll_id, str) or not isinstance(transaction, dict):
-                raise ValueError("Invalid TP transaction in character save.")
+            if (
+                not isinstance(roll_id, str)
+                or not isinstance(transaction, dict)
+                or roll_id not in inventory_by_id
+            ):
+                raise ValueError("Invalid or orphaned TP transaction in character save.")
             try:
                 float(transaction.get("amount", 0))
             except (TypeError, ValueError) as exc:
