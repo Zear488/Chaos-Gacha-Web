@@ -4,6 +4,7 @@ from .loader import load_stats_base
 from .validator import validate_json, validate_csv, validate_txt_block
 from .stats_manager import StatsManager
 from logic.roll_manager import get_equipped_rolls
+from .progression import load_character_progress
 
 
 def _has_star_bonus(pull):
@@ -39,7 +40,13 @@ class Character:
         self.csv_rows = validate_csv(path, report)
 
     def load_stats(self, report=None):
+        # Allocated level-up points are descriptive character-sheet values.
+        # They are deliberately never passed to the gacha draw engine.
         base = load_stats_base()
+        progression = load_character_progress()
+        for stat, points in progression["allocated"].items():
+            if stat in base:
+                base[stat] += points
         self.stats = StatsManager(base)
 
     # ---------------------
