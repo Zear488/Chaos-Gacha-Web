@@ -101,7 +101,7 @@ def save_character_progress(data: dict, path: str = PROGRESS_FILE) -> None:
             delete=False, suffix=".tmp"
         ) as file:
             json.dump(normalized, file, ensure_ascii=False, indent=2)
-            file.write("\\n")
+            file.write("\n")
             temp_path = file.name
         os.replace(temp_path, path)
     finally:
