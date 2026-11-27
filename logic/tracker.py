@@ -107,7 +107,7 @@ class GachaHistoryTracker:
     def get_points(self) -> float:
         return float(self.points.get("points", 0))
 
-    def spend_points(self, cost: int) -> bool:
+    def spend_points(self, cost: float) -> bool:
         self._ensure_points_available()
         self.points = self._load_points()
         if self.points["points"] >= cost:
