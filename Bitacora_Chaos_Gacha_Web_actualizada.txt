@@ -969,4 +969,84 @@ Requisito principal:
 - No añadir combate, misiones, enemigos ni sistemas ajenos al alcance
   de Chaos Gacha Web.
 
+======================================================================
+16. PRIMERA CORRECCIÓN POSTERIOR A LA REVISIÓN — CSV COMPLETO
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/persistent-roll-modifiers.
+Alcance de esta etapa: exportación e importación del historial CSV.
+
+16.1 Diagnóstico confirmado en código
+
+- El importador de Gacha_app.py exigía Type, Element, Rarity, Tier, Luck,
+  Description y Color.
+- La exportación de Show Roll History solo incluía columnas presentes en
+  la lista de vista del historial y no añadía metadatos de inventory.json.
+- La vista de inventario resumía cada instancia en seis columnas: ID,
+  Status, Type, Element, Tier y Rarity.
+- Por ello, el CSV descargado desde Show Roll History no era una copia
+  completa restaurable del inventario y no garantizaba recuperar los
+  modificadores generados.
+
+16.2 Cambios de código realizados en la rama
+
+- Nuevo módulo logic/history_csv.py.
+- Se definió un esquema CSV completo con:
+  ID, Status, Type, Element, Rarity, Tier, LuckValue, Luck, Description,
+  Color, Notes, Modifiers, ModifiersGenerated y
+  ModifierGenerationVersion.
+- El exportador une historial e inventario mediante fingerprint y
+  occurrence, de modo que las tiradas idénticas conservan IDs separados.
+- El importador admite tanto el CSV completo como CSV antiguos que tengan
+  las columnas mínimas Type, Element, Rarity y Tier. Los campos
+  opcionales ausentes se reconstruyen como vacíos cuando es posible.
+- El importador valida Status, JSON de modificadores, estructura de cada
+  modificador, tipo flat/percent, valor no negativo e IDs duplicados.
+- Los metadatos de instancia se transportan internamente separados de los
+  campos originales de la tirada, para que no contaminen el fingerprint
+  ni la reconstrucción de TP/repetidos.
+- logic/roll_manager.py reconoce IDs importados y restaura el estado,
+  los modificadores, la marca modifiers_generated y la versión del
+  generador. La generación no debe reemplazar los modificadores que
+  vienen incluidos en el CSV.
+- Gacha_app.py utiliza el nuevo parser al cargar y ofrece la descarga
+  como "Generate Complete CSV File" / "Download Complete History as CSV".
+- Se añadieron tests/test_history_csv.py para columnas completas,
+  round-trip de ID/status/modificadores, CSV antiguo y Status inválido.
+
+16.3 Criterios de aceptación que deben verificarse
+
+- Descargar desde Show Roll History y cargar el archivo en una instalación
+  limpia conserva IDs, estado y modificadores.
+- Exportar nuevamente después de importar sigue asociando cada instancia
+  con su ID, incluso si el CSV se vuelve a exportar varias veces.
+- Dos tiradas idénticas se conservan como instancias distintas.
+- Modificadores ya persistidos nunca se vuelven a sortear.
+- La importación de CSV antiguo no falla por faltar Luck, Color o
+  Description; cuando esos datos no existan, se conservan vacíos y no se
+  inventan.
+- El historial cargado sigue alimentando el tracker sin enviar los campos
+  internos de metadatos al cálculo de repetidos/TP.
+
+16.4 Estado de validación
+
+- Se escribieron los cambios y pruebas en GitHub.
+- No se ejecutaron tests de Python ni una prueba manual real de Streamlit
+  desde esta sesión.
+- No declarar esta corrección validada hasta ejecutar las pruebas y
+  realizar una importación/exportación real.
+- PR #6 permanece abierto como borrador; no se ha fusionado.
+- La rama estaba un commit detrás de main al realizar la comparación.
+  Antes de integrar, revisar ese avance y resolver cualquier divergencia.
+
+16.5 Próximo trabajo
+
+1. Ejecutar tests/test_history_csv.py y la suite existente.
+2. Probar el ciclo de exportar -> importar -> exportar de nuevo.
+3. Comprobar importación en inventario vacío y en inventario existente.
+4. Revisar la persistencia de TP y el flujo del bonus de estrellas como
+   siguiente apartado independiente de la bitácora.
+5. Después continuar con inspección de modificadores desde el inventario.
+
 FIN DE LA BITÁCORA
