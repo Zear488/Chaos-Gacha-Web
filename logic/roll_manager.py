@@ -161,6 +161,12 @@ def sync_roll_instances(
             if imported_id and instance.get("id") != imported_id:
                 instance["id"] = imported_id
                 changed = True
+            if instance.get("fingerprint") != fingerprint:
+                instance["fingerprint"] = fingerprint
+                changed = True
+            if int(instance.get("occurrence", 0)) != occurrence:
+                instance["occurrence"] = occurrence
+                changed = True
         else:
             instance = {
                 "id": imported_id or uuid.uuid4().hex,
