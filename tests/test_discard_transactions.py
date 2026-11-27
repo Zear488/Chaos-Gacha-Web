@@ -75,6 +75,15 @@ class DiscardTransactionTests(unittest.TestCase):
         self.assertEqual(self.tracker.get_points(), 0.009)
 
 
+
+    def test_spend_points_persists_fractional_cost(self):
+        self.tracker.points["points"] = 5.025
+        self.tracker._save_json(self.points_path, self.tracker.points)
+
+        self.assertTrue(self.tracker.spend_points(5.025))
+        reloaded = GachaHistoryTracker()
+        self.assertEqual(reloaded.get_points(), 0.0)
+
     def test_fractional_star_spending_survives_history_reload(self):
         self.tracker.award_discard_points("seed-roll", "Elite")  # +0.025 TP
         history = [
