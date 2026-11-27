@@ -964,189 +964,232 @@ if st.session_state["show_individual_inventory_toggle"]:
                 if instance.get("status", "stored") in {"stored", "equipped"}
             ]
             if selectable_instances:
-                instance_labels = {
-                    instance["id"]: (
-                        f"{instance.get('pull', {}).get('Element', 'Unknown')} "
-                        f"— {instance.get('pull', {}).get('Type', '')} "
-                        f"[{instance.get('status', 'stored')}] "
-                        f"(ID: {instance['id'][:8]})"
+                st.markdown("#### Find a pull")
+                filter_col, search_col = st.columns([1, 2])
+                with filter_col:
+                    inventory_category_filter = st.selectbox(
+                        "Category",
+                        options=["All", *EQUIPMENT_CATEGORIES, "Item"],
+                        key="inventory_category_filter",
                     )
-                    for instance in selectable_instances
-                }
-                selected_roll_id = st.selectbox(
-                    "Select an individual pull",
-                    options=[instance["id"] for instance in selectable_instances],
-                    format_func=lambda roll_id: instance_labels[roll_id],
-                    key="selected_inventory_roll_id",
-                )
-                selected_instance = next(
+                with search_col:
+                    inventory_search = st.text_input(
+                        "Search by name or ID",
+                        placeholder="Type a name or paste an ID...",
+                        key="inventory_pull_search",
+                    ).strip().casefold()
+
+                filtered_instances = [
                     instance for instance in selectable_instances
-                    if instance["id"] == selected_roll_id
-                )
-
-                # Read-only inspection: viewing a pull never equips it or
-                # regenerates its already-persisted modifiers.
-                selected_pull = selected_instance.get("pull", {})
-                with st.expander("🔎 Inspect selected pull", expanded=True):
-                    st.markdown(f"**{selected_pull.get('Element', 'Unknown')}**")
-                    st.caption(
-                        f"{selected_pull.get('Type', 'Unknown')} · "
-                        f"{selected_pull.get('Tier', 'Unknown')} · "
-                        f"ID: {selected_instance['id']}"
+                    if (
+                        inventory_category_filter == "All"
+                        or str(instance.get("pull", {}).get("Type", "")).strip().casefold()
+                        == inventory_category_filter.casefold()
                     )
-
-                    random_modifiers = selected_instance.get("modifiers", [])
-                    if random_modifiers:
-                        modifier_rows = []
-                        for modifier in random_modifiers:
-                            kind = modifier.get("kind", "")
-                            value = modifier.get("value", 0)
-                            if kind == "percent":
-                                formatted_value = f"+{float(value):.2f}%"
-                                kind_label = "Percent"
-                            elif kind == "flat":
-                                formatted_value = f"+{float(value):.2f}"
-                                kind_label = "Flat"
-                            else:
-                                formatted_value = str(value)
-                                kind_label = str(kind)
-                            modifier_rows.append({
-                                "Stat": modifier.get("stat", "Unknown"),
-                                "Modifier": kind_label,
-                                "Value": formatted_value,
-                            })
-                        st.markdown("**Random generated modifiers**")
-                        st.dataframe(
-                            pd.DataFrame(modifier_rows),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-                    elif selected_instance.get("modifiers_generated"):
-                        st.caption("This pull has no generated stat modifiers.")
-                    elif selected_pull.get("Type") == "Item":
-                        st.caption(
-                            "Items are currently excluded from random stat modifiers."
-                        )
-                    else:
-                        st.caption(
-                            "No persisted random modifiers are available for this pull."
-                        )
-
-                    legacy_stats = {}
-                    legacy_resistances = {}
-                    for description_line in str(
-                        selected_pull.get("Description", "")
-                    ).splitlines():
-                        if "#STATS" in description_line:
-                            for stat, value in parse_stats(description_line).items():
-                                legacy_stats[stat] = legacy_stats.get(stat, 0) + value
-                        elif "#RESISTANCES" in description_line:
-                            for resistance, value in parse_resistances(description_line).items():
-                                legacy_resistances[resistance] = (
-                                    legacy_resistances.get(resistance, 0) + value
-                                )
-
-                    if legacy_stats:
-                        st.markdown("**Descriptive #STATS**")
-                        st.dataframe(
-                            pd.DataFrame([
-                                {"Stat": stat, "Value": f"{value:+d}"}
-                                for stat, value in legacy_stats.items()
-                            ]),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-
-                    if legacy_resistances:
-                        st.markdown("**Descriptive #RESISTANCES**")
-                        st.dataframe(
-                            pd.DataFrame([
-                                {"Resistance": resistance, "Value": f"{value:+d}%"}
-                                for resistance, value in legacy_resistances.items()
-                            ]),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-
-                    has_star = (
-                        str(selected_pull.get("Element", "")).lstrip().startswith("★")
-                        or "boosted star bonus" in str(
-                            selected_pull.get("Notes", "")
+                    and (
+                        not inventory_search
+                        or inventory_search in str(
+                            instance.get("pull", {}).get("Element", "")
+                        ).casefold()
+                        or inventory_search in str(instance.get("id", "")).casefold()
+                        or inventory_search in str(
+                            instance.get("pull", {}).get("Type", "")
                         ).casefold()
                     )
-                    if has_star:
-                        if selected_instance.get("status") == "equipped":
-                            st.success(
-                                "★ Equipped star bonus: +5% to all final character stats."
+                ]
+
+                if not filtered_instances:
+                    st.info("No pulls match the selected category and search.")
+                else:
+                    instance_labels = {
+                        instance["id"]: (
+                            f"{instance.get('pull', {}).get('Element', 'Unknown')} "
+                            f"— {instance.get('pull', {}).get('Type', '')} "
+                            f"[{instance.get('status', 'stored')}] "
+                            f"(ID: {instance['id'][:8]})"
+                        )
+                        for instance in filtered_instances
+                    }
+                    filtered_ids = [instance["id"] for instance in filtered_instances]
+                    # A category/search change can hide the previously selected
+                    # ID. Reset it before creating the selectbox so React and
+                    # Streamlit keep a valid, stable selection.
+                    if st.session_state.get("selected_inventory_roll_id") not in filtered_ids:
+                        st.session_state["selected_inventory_roll_id"] = filtered_ids[0]
+                    selected_roll_id = st.selectbox(
+                        "Select an individual pull",
+                        options=filtered_ids,
+                        format_func=lambda roll_id: instance_labels[roll_id],
+                        key="selected_inventory_roll_id",
+                    )
+                    selected_instance = next(
+                        instance for instance in filtered_instances
+                        if instance["id"] == selected_roll_id
+                    )
+
+                    # Read-only inspection: viewing a pull never equips it or
+                    # regenerates its already-persisted modifiers.
+                    selected_pull = selected_instance.get("pull", {})
+                    with st.expander("🔎 Inspect selected pull", expanded=True):
+                        st.markdown(f"**{selected_pull.get('Element', 'Unknown')}**")
+                        st.caption(
+                            f"{selected_pull.get('Type', 'Unknown')} · "
+                            f"{selected_pull.get('Tier', 'Unknown')} · "
+                            f"ID: {selected_instance['id']}"
+                        )
+
+                        random_modifiers = selected_instance.get("modifiers", [])
+                        if random_modifiers:
+                            modifier_rows = []
+                            for modifier in random_modifiers:
+                                kind = modifier.get("kind", "")
+                                value = modifier.get("value", 0)
+                                if kind == "percent":
+                                    formatted_value = f"+{float(value):.2f}%"
+                                    kind_label = "Percent"
+                                elif kind == "flat":
+                                    formatted_value = f"+{float(value):.2f}"
+                                    kind_label = "Flat"
+                                else:
+                                    formatted_value = str(value)
+                                    kind_label = str(kind)
+                                modifier_rows.append({
+                                    "Stat": modifier.get("stat", "Unknown"),
+                                    "Modifier": kind_label,
+                                    "Value": formatted_value,
+                                })
+                            st.markdown("**Random generated modifiers**")
+                            st.dataframe(
+                                pd.DataFrame(modifier_rows),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        elif selected_instance.get("modifiers_generated"):
+                            st.caption("This pull has no generated stat modifiers.")
+                        elif selected_pull.get("Type") == "Item":
+                            st.caption(
+                                "Items are currently excluded from random stat modifiers."
                             )
                         else:
-                            st.info(
-                                "★ Star bonus: +5% to all final character stats "
-                                "while this pull is equipped."
+                            st.caption(
+                                "No persisted random modifiers are available for this pull."
                             )
 
-                    description = str(selected_pull.get("Description", "")).strip()
-                    if description:
-                        st.markdown("**Original description**")
-                        st.text(description)
+                        legacy_stats = {}
+                        legacy_resistances = {}
+                        for description_line in str(
+                            selected_pull.get("Description", "")
+                        ).splitlines():
+                            if "#STATS" in description_line:
+                                for stat, value in parse_stats(description_line).items():
+                                    legacy_stats[stat] = legacy_stats.get(stat, 0) + value
+                            elif "#RESISTANCES" in description_line:
+                                for resistance, value in parse_resistances(description_line).items():
+                                    legacy_resistances[resistance] = (
+                                        legacy_resistances.get(resistance, 0) + value
+                                    )
 
-                selected_type = str(
-                    selected_instance.get("pull", {}).get("Type", "")
-                ).strip()
-                action_col1, action_col2, action_col3 = st.columns(3)
+                        if legacy_stats:
+                            st.markdown("**Descriptive #STATS**")
+                            st.dataframe(
+                                pd.DataFrame([
+                                    {"Stat": stat, "Value": f"{value:+d}"}
+                                    for stat, value in legacy_stats.items()
+                                ]),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
 
-                if selected_instance.get("status", "stored") == "equipped":
-                    with action_col2:
-                        if st.button("Unequip selected pull", key="unequip_selected_roll"):
-                            try:
-                                unequip_roll(selected_roll_id)
-                                st.success("Pull returned to stored inventory.")
-                                st.rerun()
-                            except (InventoryStateError, ValueError) as error:
-                                st.error(str(error))
-                elif selected_type.casefold() not in {
-                    category.casefold() for category in EQUIPMENT_CATEGORIES
-                }:
-                    st.info(
-                        f"{selected_type or 'This category'} does not have "
-                        "an equipment slot. Items remain in stored inventory."
-                    )
-                else:
-                    with action_col1:
-                        if st.button("Equip selected pull", key="equip_selected_roll"):
-                            try:
-                                equip_roll(
-                                    selected_roll_id,
-                                    int(character_level),
-                                )
-                                st.success("Pull equipped successfully.")
-                                st.rerun()
-                            except (InventoryStateError, ValueError) as error:
-                                st.error(str(error))
+                        if legacy_resistances:
+                            st.markdown("**Descriptive #RESISTANCES**")
+                            st.dataframe(
+                                pd.DataFrame([
+                                    {"Resistance": resistance, "Value": f"{value:+d}%"}
+                                    for resistance, value in legacy_resistances.items()
+                                ]),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
 
-                confirm_discard = st.checkbox(
-                    "Confirm irreversible discard",
-                    key=f"confirm_discard_{selected_roll_id}",
-                )
-                with action_col3:
-                    if st.button(
-                        "Discard selected pull",
-                        key="discard_selected_roll",
-                        disabled=not confirm_discard,
-                    ):
-                        try:
-                            result = discard_roll(selected_roll_id, tracker)
-                            if result["tp_awarded_now"]:
+                        has_star = (
+                            str(selected_pull.get("Element", "")).lstrip().startswith("★")
+                            or "boosted star bonus" in str(
+                                selected_pull.get("Notes", "")
+                            ).casefold()
+                        )
+                        if has_star:
+                            if selected_instance.get("status") == "equipped":
                                 st.success(
-                                    f"Discarded. +{result['tp_value']:.3f} TP awarded."
+                                    "★ Equipped star bonus: +5% to all final character stats."
                                 )
                             else:
-                                st.success(
-                                    "Discard state completed; TP for this ID was already recorded."
+                                st.info(
+                                    "★ Star bonus: +5% to all final character stats "
+                                    "while this pull is equipped."
                                 )
-                            st.rerun()
-                        except (InventoryStateError, ValueError) as error:
-                            st.error(str(error))
+
+                        description = str(selected_pull.get("Description", "")).strip()
+                        if description:
+                            st.markdown("**Original description**")
+                            st.text(description)
+
+                    selected_type = str(
+                        selected_instance.get("pull", {}).get("Type", "")
+                    ).strip()
+                    action_col1, action_col2, action_col3 = st.columns(3)
+
+                    if selected_instance.get("status", "stored") == "equipped":
+                        with action_col2:
+                            if st.button("Unequip selected pull", key=f"unequip_selected_roll_{selected_roll_id}"):
+                                try:
+                                    unequip_roll(selected_roll_id)
+                                    st.success("Pull returned to stored inventory.")
+                                    st.rerun()
+                                except (InventoryStateError, ValueError) as error:
+                                    st.error(str(error))
+                    elif selected_type.casefold() not in {
+                        category.casefold() for category in EQUIPMENT_CATEGORIES
+                    }:
+                        st.info(
+                            f"{selected_type or 'This category'} does not have "
+                            "an equipment slot. Items remain in stored inventory."
+                        )
+                    else:
+                        with action_col1:
+                            if st.button("Equip selected pull", key=f"equip_selected_roll_{selected_roll_id}"):
+                                try:
+                                    equip_roll(
+                                        selected_roll_id,
+                                        int(character_level),
+                                    )
+                                    st.success("Pull equipped successfully.")
+                                    st.rerun()
+                                except (InventoryStateError, ValueError) as error:
+                                    st.error(str(error))
+
+                    confirm_discard = st.checkbox(
+                        "Confirm irreversible discard",
+                        key=f"confirm_discard_{selected_roll_id}",
+                    )
+                    with action_col3:
+                        if st.button(
+                            "Discard selected pull",
+                            key=f"discard_selected_roll_{selected_roll_id}",
+                            disabled=not confirm_discard,
+                        ):
+                            try:
+                                result = discard_roll(selected_roll_id, tracker)
+                                if result["tp_awarded_now"]:
+                                    st.success(
+                                        f"Discarded. +{result['tp_value']:.3f} TP awarded."
+                                    )
+                                else:
+                                    st.success(
+                                        "Discard state completed; TP for this ID was already recorded."
+                                    )
+                                st.rerun()
+                            except (InventoryStateError, ValueError) as error:
+                                st.error(str(error))
             else:
                 st.info("There are no stored or equipped instances to manage.")
         else:
@@ -1159,6 +1202,36 @@ from character.validator import ValidationReport
 
 st.markdown("---")
 st.header("🧬 Character Builder Integration")
+
+# Keep character generation at the start of this section so the generated
+# portrait and summary appear beside the builder controls, not after exports.
+if st.button("🧪 Generate Character From Gacha", key="generate_character_from_gacha"):
+    report = ValidationReport()
+    char = Character()
+    try:
+        char.load_free_categories("characterfiles", report)
+        data = char.build()
+    except (InventoryDataError, ValueError) as error:
+        st.error(f"Unable to build character data: {error}")
+    else:
+        st.subheader("🧑 Character Profile")
+        saved_portrait_path = get_portrait_path(data["profile"])
+        if saved_portrait_path:
+            st.image(saved_portrait_path, caption="Character portrait", width=260)
+        st.json(data["profile"])
+
+        st.subheader("📌 Final Stats")
+        st.json(data["stats"])
+
+        st.subheader("🔥 Resistances")
+        st.json(data["resistances"])
+
+        st.subheader("📚 Additional Fields")
+        st.json(data["fields"])
+
+        st.markdown("---")
+        st.subheader("🛠 Validation Report")
+        st.json(report.to_dict())
 
 # Narrative level and stat-point allocation. Character attributes are never
 # used by the gacha engine; only the pull history determines level.
@@ -1377,32 +1450,4 @@ with restore_col:
         except (OSError, ValueError, TypeError) as error:
             st.error(f"Could not restore character save: {error}")
 
-if st.button("🧪 Generate Character From Gacha"):
-    report = ValidationReport()
-    char = Character()
 
-    char.load_free_categories("characterfiles", report)
-
-    try:
-        data = char.build()
-    except (InventoryDataError, ValueError) as error:
-        st.error(f"Unable to build character data: {error}")
-    else:
-        st.subheader("🧑 Character Profile")
-        st.json(data["profile"])
-        saved_portrait_path = get_portrait_path(data["profile"])
-        if saved_portrait_path:
-            st.image(saved_portrait_path, caption="Character portrait", width=260)
-
-        st.subheader("📌 Final Stats")
-        st.json(data["stats"])
-
-        st.subheader("🔥 Resistances")
-        st.json(data["resistances"])
-
-        st.subheader("📚 Additional Fields")
-        st.json(data["fields"])
-
-        st.markdown("---")
-        st.subheader("🛠 Validation Report")
-        st.json(report.to_dict())

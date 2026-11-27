@@ -1721,3 +1721,48 @@ Base: feature/character-profile-and-portrait (PR #13, borrador).
   commits revisados.
 
 FIN DE LA BITÁCORA
+
+
+======================================================================
+25. MANTENIMIENTO DE INTERFAZ: EQUIPMENT Y CHARACTER BUILDER (27-11-2026)
+======================================================================
+
+OBJETIVO
+- Corregir problemas de estabilidad y mejorar la comodidad al administrar instancias individuales.
+- Mejorar la jerarquía visual de Character Builder Integration.
+- Mantener intactos el motor gacha, los límites normales de modificadores y las reglas de progresión.
+
+CAMBIOS REALIZADOS EN LA RAMA fix/equipment-ui-and-character-builder-layout
+
+25.1 Equipment: búsqueda y filtrado
+- Se añadió un filtro de categoría: All, Ability, Familiar, Skill, Trait e Item.
+- Se añadió búsqueda textual por nombre de Element, categoría o ID de instancia.
+- La lista de resultados se filtra antes de construir el selector individual.
+- Si el filtro oculta la instancia previamente seleccionada, la selección se restablece a la primera coincidencia antes de renderizar el widget.
+- Las claves de los botones Equip, Unequip y Discard ahora incluyen el ID de la instancia seleccionada, evitando reutilizar una misma identidad de widget entre distintas instancias.
+- No se modifica la identidad persistente de las tiradas, sus modificadores, el estado de equipamiento ni la contabilidad de TP.
+
+25.2 Character Builder Integration: orden visual
+- El botón Generate Character From Gacha y su resultado se trasladaron al inicio de Character Builder Integration.
+- El retrato guardado se presenta antes de los datos JSON del perfil generado.
+- Se eliminó el bloque duplicado que anteriormente generaba el personaje al final de la página, después de Portable Character Save.
+- No se cambió el proceso Character.build() ni los datos que devuelve.
+
+25.3 Error reportado en Equipment
+- El usuario reportó NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node, con stack trace dentro de react-dom.
+- La traza del navegador no identifica por sí sola el componente Python responsable.
+- Se aplicaron medidas de estabilidad al filtrado/selección y a la identidad de los botones, pero la causa raíz del error DOM no se considera confirmada hasta reproducirlo y probar el flujo en navegador.
+- Pendiente: validar manualmente cambios de categoría/búsqueda, selección, equipar, desequipar y descartar; si el error persiste, obtener pasos exactos de reproducción y revisar los componentes dinámicos implicados.
+
+25.4 Modificadores especiales: diseño futuro, NO IMPLEMENTADO
+- Se acordó conceptualmente que los futuros modificadores especiales serán una generación separada de los modificadores normales.
+- No consumirán ni alterarán el límite/cantidad de slots de modificadores normales.
+- Ambos grupos se asignarán a la misma instancia de pull y se representarán en la exportación/importación CSV, manteniendo sus datos separados.
+- Los efectos especiales se proyectarán en Character Builder dentro de Resistances y Additional Fields, incluyendo inicialmente resistencias, probabilidades críticas y daño crítico, con posibilidad de ampliar el conjunto de campos.
+- La estructura exacta de almacenamiento, nombres de columnas CSV, rangos, probabilidades y formato de los campos queda pendiente de especificación antes de implementar.
+- No se modificó el generador actual ni se añadieron efectos especiales en esta etapa.
+
+VALIDACIÓN
+- Se creó una rama desde main y se actualizó Gacha_app.py.
+- No se ejecutaron pruebas automatizadas ni una prueba manual de Streamlit en navegador en esta etapa.
+- No fusionar la rama sin autorización explícita del usuario.
