@@ -1572,4 +1572,69 @@ Base: feature/inventory-modifier-inspection (PR #11, aún borrador).
   asignaciones de puntos; estas forman parte del futuro guardado completo.
 - No añadir autenticación, nube ni sincronización.
 
+======================================================================
+23. PERFIL NARRATIVO Y RETRATO DEL PERSONAJE
+======================================================================
+
+Fecha: 26-11-2026.
+Rama: feature/character-profile-and-portrait.
+Base: feature/pull-based-character-progression (PR #12, borrador).
+
+23.1 Módulo character/profile_manager.py
+
+- Se añadió persistencia local de perfil en
+  characterfiles/character_profile.json.
+- Campos escalares: Name, Race, Class, Lineage, Talent, Element, Age,
+  Gender, Origin, Appearance, Personality, Background y Notes.
+- Campos de lista: Factions, Reputations, Resistances y Titles.
+- Las listas se editan una entrada por línea.
+- El esquema se valida al cargar y guardar.
+- La escritura JSON usa archivo temporal y os.replace.
+- Los campos de perfil son narrativos y no modifican pulls, probabilidades,
+  modificadores aleatorios ni cálculos de estadísticas.
+
+23.2 Retrato
+
+- El editor acepta PNG, JPG, JPEG y WEBP, máximo 10 MB.
+- El archivo se almacena localmente en characterfiles/portraits.
+- El nombre de archivo guardado se normaliza a character_portrait.ext;
+  no se usa directamente una ruta proporcionada por el usuario.
+- Se conserva el retrato anterior si no se carga uno nuevo.
+- Se muestra una vista previa del retrato actual.
+- El retrato se incluye en la salida del Character Builder mediante
+  el perfil guardado.
+
+23.3 Interfaz
+
+- Se añadió Character Profile junto a Character Builder Integration.
+- Las etiquetas de los campos están en inglés.
+- Permite guardar perfil y retrato localmente.
+- La ficha final presenta el perfil y el retrato además de estadísticas,
+  resistencias y campos procedentes de las tiradas equipadas.
+- El perfil manual y los datos procedentes de tags equipados permanecen
+  como fuentes separadas; no se suman ni sobrescriben automáticamente.
+
+23.4 Pruebas y validación
+
+- Se añadió tests/test_character_profile.py para persistencia de campos,
+  conversión de listas, almacenamiento del retrato y rechazo de extensión
+  no permitida.
+- No se ejecutaron pruebas automatizadas ni una sesión Streamlit durante
+  esta edición.
+- Validación manual pendiente: guardar, recargar, previsualizar y
+  reemplazar retrato; comprobar campos con acentos y texto multilínea.
+
+23.5 Próximo paso
+
+- Diseñar e implementar un paquete portable de guardado/restauración
+  integral del personaje.
+- Debe incluir historial CSV completo, IDs de tiradas, estados de
+  inventario, modificadores persistidos, TP y ledger, progresión y
+  puntos asignados, estadísticas base, perfil narrativo y retrato.
+- La restauración debe ser transaccional o validar todos los componentes
+  antes de reemplazar datos locales para evitar estados parciales.
+- Mantener LOCAL / SINGLE; no introducir cuentas, nube ni sincronización.
+- La importación CSV simple seguirá siendo solo historial de pulls; el
+  paquete completo será el mecanismo para trasladar todo el personaje.
+
 FIN DE LA BITÁCORA
