@@ -1253,4 +1253,159 @@ Cambios de código:
   6. Verificar que LCK de Character Builder no cambia las probabilidades
      ni la magnitud de tiradas futuras.
 
+======================================================================
+19. VALIDACIÓN DEL USUARIO Y SIGUIENTE ETAPA
+======================================================================
+
+Fecha: 26-11-2026.
+Origen: el usuario probó las correcciones del bloque 18 y confirmó que
+los cambios funcionaron correctamente.
+
+19.1 Validación funcional reportada por el usuario
+
+- El CSV completo funciona y registra correctamente los datos de las
+  instancias.
+- El usuario confirmó que las correcciones del consumo de TP, Clear
+  History y bonus global de estrella fueron satisfactorias.
+- El bonus global queda establecido en +5% por instancia equipada con
+  estrella, hasta +20% (cuatro instancias).
+- El consumo de TP admite importes decimales y el descuento se conserva
+  al reconstruir el historial.
+- Clear History debe limpiar también logs/gacha_history.csv y los datos
+  persistentes asociados.
+- Esta confirmación corresponde a validación funcional manual del
+  usuario. No equivale a una ejecución automatizada de la suite; no
+  afirmar que los tests hayan pasado sin ejecutarlos.
+
+19.2 Alcance de Character Builder reafirmado
+
+- Es una ficha descriptiva/narrativa para roleo.
+- Las estadísticas de la ficha no influyen en pulls.
+- No agregar sistemas de combate o simulación.
+- LuckValue del pull permanece como dato propio del motor gacha para
+  generación de modificadores. LCK del personaje es descriptivo.
+- TP conserva su función autorizada de recurso para el bonus de estrella.
+
+19.3 Siguiente tarea autorizada: inspección de modificadores desde inventario
+
+Objetivo:
+- Al seleccionar cualquier instancia en Individual Roll Inventory, mostrar
+  los atributos que ofrece sin necesidad de equiparla.
+- Diferenciar claramente modificadores flat (puntos directos) y percent
+  (porcentaje).
+- Mostrar valor, estadística afectada y signo/unidad.
+- Mostrar también los bonuses descriptivos heredados #STATS y
+  #RESISTANCES que existan en Description.
+- Si la instancia tiene bonus de estrella, indicar que al equiparla aporta
+  +5% global a todas las estadísticas finales del personaje. Dejar claro
+  que este efecto solo cuenta mientras esté equipada.
+- La inspección es solo de lectura: no equipar, desequipar, descartar,
+  modificar ni volver a sortear datos.
+- Item sigue excluido del sistema de modificadores estadísticos; mostrar
+  cualquier descripción que tenga, sin inventarle estadísticas.
+
+Criterios de aceptación:
+1. Seleccionar una tirada stored permite inspeccionar sus estadísticas.
+2. Seleccionar una tirada equipped muestra exactamente los mismos
+   modificadores persistidos.
+3. Flat aparece en puntos (+N.NN); Percent aparece en porcentaje (+N.NN%).
+4. #STATS y #RESISTANCES se distinguen de modificadores aleatorios.
+5. Una instancia con ★ muestra el bonus global de +5% si está equipada.
+6. Inspeccionar no altera el estado de la instancia ni genera nuevos rolls.
+7. El panel de inventario permanece abierto al seleccionar otras instancias.
+
+19.4 Después de la inspección
+
+Continuar en este orden:
+1. Diseñar la fórmula de nivel basada en cantidad de pulls antes de
+   implementarla. Evitar contar dos veces tiradas repetidas al importar
+   o restaurar CSV.
+2. Añadir perfil/editor descriptivo junto a Character Builder con campos
+   en inglés (Race, Class, Lineage, Talent, Element, Factions,
+   Reputations, Resistances y campos adicionales).
+3. Permitir asociar y conservar un portrait.
+4. Diseñar guardado/restauración integral portable del personaje,
+   incluyendo historial CSV, IDs, estados de inventario, modificadores,
+   TP/ledger, nivel, estadísticas base, perfil e imagen.
+5. Validar exportación, importación y restauración completa.
+
+19.5 Restricciones
+
+- Mantener LOCAL / SINGLE; no agregar cuentas, login, nube ni sync.
+- No alterar probabilidades del gacha.
+- No usar estadísticas de Character Builder como entrada del motor gacha.
+- No re-sortear modificadores persistidos.
+- No fusionar PRs sin autorización explícita.
+- La bitácora registra decisiones y progreso; el repositorio sigue siendo
+  fuente de verdad del código.
+
+======================================================================
+20. INSPECCIÓN DE MODIFICADORES EN INDIVIDUAL ROLL INVENTORY
+======================================================================
+
+Fecha: 26-11-2026.
+Rama de trabajo: fix/tp-spending-and-clear-history.
+Alcance: mostrar los atributos de una instancia sin equiparla.
+
+20.1 Implementación añadida
+
+- Al seleccionar una instancia en Individual Roll Inventory se muestra
+  un panel "Inspect selected pull".
+- El panel es de solo lectura y no cambia status, IDs ni datos guardados.
+- Muestra modificadores aleatorios persistidos con tres columnas:
+  Stat, Modifier y Value.
+- Flat se etiqueta como Flat y se muestra como puntos directos (+N.NN).
+- Percent se etiqueta como Percent y se muestra con porcentaje (+N.NN%).
+- Si no existen modificadores, explica si el objeto es Item, si la
+  instancia ya fue generada sin modificadores o si no hay datos persistidos.
+- Interpreta los tags descriptivos #STATS y #RESISTANCES desde Description
+  y los presenta por separado de los modificadores aleatorios.
+- Los tags repetidos en varias líneas se acumulan para no ocultar valores.
+- Muestra la descripción original completa.
+- Si la tirada tiene marca ★ o nota Boosted Star Bonus, muestra el bonus
+  global de +5%. Si está equipada, informa que está activo; si está
+  almacenada, indica que se activará al equiparla.
+- No genera nuevos modificadores, no llama a equip_roll() y no altera
+  el estado de inventario al inspeccionar.
+
+20.2 Reglas de presentación
+
+- Modificadores Flat y Percent son fuentes diferentes y nunca deben
+  mostrarse como si fueran el mismo tipo.
+- #STATS y #RESISTANCES son datos descriptivos heredados de Description;
+  no deben confundirse con los modificadores aleatorios persistidos.
+- Item sigue excluido de los modificadores aleatorios y no se le inventan
+  estadísticas.
+- El bonus de estrella es global para todas las estadísticas finales de
+  Character Builder, +5% por estrella equipada hasta +20%.
+- La inspección no debe cerrar el panel Individual Roll Inventory ni
+  modificar la selección.
+
+20.3 Validación pendiente
+
+- Código actualizado en Gacha_app.py.
+- No se ejecutó Streamlit ni la suite automatizada desde esta sesión.
+- El usuario debe comprobar con:
+  1. Una instancia stored con Flat y Percent.
+  2. Una instancia equipped con los mismos modificadores.
+  3. Una instancia con #STATS y #RESISTANCES.
+  4. Una instancia ★ almacenada y luego equipada.
+  5. Un Item y una instancia sin modificadores.
+- En todos los casos, abrir la inspección no debe cambiar el estado,
+  volver a sortear modificadores ni cerrar el inventario.
+
+20.4 Siguiente tarea: definir progresión de nivel por tiradas
+
+- La bitácora solicita diseñar la fórmula antes de implementarla.
+- No se debe tomar automáticamente el input temporal de nivel de slots
+  como nivel persistente del personaje.
+- El nivel debe derivarse del total de tiradas lanzadas, con una regla
+  explícita de conteo y umbrales.
+- Decidir si cuenta toda tirada, solo tiradas no descartadas o tiradas
+  únicas; los repetidos no deben duplicarse accidentalmente al importar
+  historial.
+- Definir si Clear History reinicia el nivel (debe seguir la misma fuente
+  de verdad del historial).
+- No implementar nivel hasta acordar la fórmula y el criterio de conteo.
+
 FIN DE LA BITÁCORA
