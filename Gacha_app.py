@@ -13,6 +13,7 @@ from logic.roll_manager import (
     equip_roll, unequip_roll, get_equipment_slots, InventoryStateError,
     EQUIPMENT_CATEGORIES, discard_roll,
 )
+from logic.history_csv import parse_history_csv, strip_import_metadata, serialize_history_csv
 import numpy as np
 import math
 import altair as alt
@@ -41,56 +42,25 @@ if "log" not in st.session_state:
 def load_csv_data(content: str):
     global tracker
     try:
-        # Detectar separador probable
-        if "\t" in content:
-            sep = "\t"
-        elif ";" in content:
-            sep = ";"
-        else:
-            sep = ","
+        imported_rows = parse_history_csv(content)
+        if not imported_rows:
+            st.sidebar.warning("The CSV contains no pull records.")
+            return
 
-        df_loaded = pd.read_csv(io.StringIO(content), sep=sep)
+        # Preserve instance metadata in session state; strip it for gacha
+        # repeat/TP reconstruction because it is not part of a pull itself.
+        st.session_state["log"] = imported_rows
+        sync_roll_instances(imported_rows)
+        tracker.load_from_log([
+            strip_import_metadata(row) for row in imported_rows
+        ])
 
-        # Si solo hay una columna, forzar con tab
-        if len(df_loaded.columns) == 1:
-            df_loaded = pd.read_csv(io.StringIO(content), sep="\t")
-
-        required_cols = {"Type", "Element", "Rarity", "Tier", "Luck", "Description", "Color"}
-        if required_cols.issubset(df_loaded.columns):
-
-            # 🔧 LIMPIAR columnas antes de pasar al tracker
-            df_loaded["Rarity"] = pd.to_numeric(df_loaded["Rarity"], errors="coerce")
-            df_loaded["Luck"] = df_loaded["Luck"].astype(str).str.replace('%', '', regex=False)
-            df_loaded["Luck"] = pd.to_numeric(df_loaded["Luck"], errors="coerce")
-
-            if "Notes" in df_loaded.columns:
-                df_loaded["Notes"] = df_loaded["Notes"].fillna("").astype(str)
-            else:
-                df_loaded["Notes"] = ""
-
-            if any("���" in note for note in df_loaded["Notes"]):
-                st.sidebar.warning("⚠️ Some notes contain unreadable characters (���). This may affect TP calculation.")
-
-            # Guardar en sesión
-            st.session_state["log"] = df_loaded.to_dict(orient="records")
-            sync_roll_instances(st.session_state["log"])
-
-            # ✅ Tracker debe cargarse DESPUÉS de limpiar
-            tracker.load_from_log(st.session_state["log"])
-
-            st.sidebar.success("✅ History loaded successfully.")
-
-            # 🧹 Limpiar textarea para evitar recarga infinita
-            st.session_state["manual_csv"] = ""
-
-        else:
-            missing = required_cols - set(df_loaded.columns)
-            st.sidebar.error(f"❌ Invalid CSV format. Missing columns: {', '.join(missing)}")
-            st.sidebar.write("🔎 Columns found:", list(df_loaded.columns))
-            st.sidebar.dataframe(df_loaded.head())
-
-    except Exception as e:
-        st.sidebar.error(f"❌ Error loading CSV: {e}")
+        st.sidebar.success(
+            f"History loaded successfully: {len(imported_rows)} pull(s) restored."
+        )
+        st.session_state["manual_csv"] = ""
+    except Exception as error:
+        st.sidebar.error(f"Invalid history CSV: {error}")
 
 # Opción 1: archivo subido
 if uploaded_file:
@@ -562,21 +532,21 @@ if st.session_state.get("log"):
 
         st.session_state["rendering_log"] = False
 
-        df_log = pd.DataFrame(st.session_state["log"])
-        if "Luck" in df_log.columns:
-            df_log["Luck"] = df_log["Luck"].astype(str)
+        df_log = pd.DataFrame([
+            strip_import_metadata(row) for row in st.session_state["log"]
+        ])
         columns_order = ["Type", "Element", "Rarity", "Tier", "LuckValue", "Luck", "Description", "Color", "Notes"]
         df_log = df_log[[col for col in columns_order if col in df_log.columns]]
 
-        if st.button("⬇️ Generate CSV File"):
-            csv_buffer = io.StringIO()
-            df_log.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
-            csv_data = csv_buffer.getvalue()
-            st.session_state["csv_data"] = csv_data
+        if st.button("⬇️ Generate Complete CSV File"):
+            st.session_state["csv_data"] = serialize_history_csv(
+                st.session_state["log"],
+                get_inventory(),
+            )
 
         if st.session_state.get("csv_data"):
             st.download_button(
-                label="📥 Download History as CSV",
+                label="📥 Download Complete History as CSV",
                 data=st.session_state["csv_data"],
                 file_name="gacha_history.csv",
                 mime="text/csv"
