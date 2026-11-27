@@ -1245,8 +1245,8 @@ if st.button("🧪 Generate Character From Gacha"):
 
     try:
         data = char.build()
-    except InventoryDataError as error:
-        st.error(f"Unable to load equipped inventory: {error}")
+    except (InventoryDataError, ValueError) as error:
+        st.error(f"Unable to build character data: {error}")
     else:
         st.subheader("📌 Final Stats")
         st.json(data["stats"])
