@@ -161,9 +161,11 @@ class GachaHistoryTracker:
                 total_points += 1
 
         # Aceptar cualquier "- X TP"
-            match = re.search(r"-\s*(\d+)\s*TP", notes)
+            # Star-bonus spending may include fractional TP (for example,
+            # 5.025 TP). Parse the full decimal amount when rebuilding balance.
+            match = re.search(r"-\s*(\d+(?:\.\d+)?)\s*TP", notes)
             if match:
-                total_points -= int(match.group(1))
+                total_points -= float(match.group(1))
 
         transactions = self._load_points().get("discard_transactions", {})
         discard_total = sum(
