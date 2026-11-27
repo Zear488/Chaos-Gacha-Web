@@ -876,16 +876,15 @@ if st.session_state["show_curve_analysis"]:
 
 # ------------------ PERSISTENT ROLL INVENTORY ------------------
 st.markdown("---")
-if "show_individual_inventory" not in st.session_state:
-    st.session_state["show_individual_inventory"] = False
+if "show_individual_inventory_toggle" not in st.session_state:
+    st.session_state["show_individual_inventory_toggle"] = False
 
-st.session_state["show_individual_inventory"] = st.checkbox(
+st.checkbox(
     "🎒 Individual Roll Inventory",
-    value=st.session_state["show_individual_inventory"],
     key="show_individual_inventory_toggle",
 )
 
-if st.session_state["show_individual_inventory"]:
+if st.session_state["show_individual_inventory_toggle"]:
     try:
         inventory_instances = get_inventory()
         if inventory_instances:
