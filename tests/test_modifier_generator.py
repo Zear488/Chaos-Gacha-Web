@@ -123,6 +123,23 @@ class ModifierGeneratorTests(unittest.TestCase):
             self.assertTrue(second[0]["modifiers_generated"])
             self.assertEqual(get_inventory(path)[0]["modifiers"], saved_first)
 
+    def test_special_modifiers_are_persisted_once_per_instance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "inventory.json")
+            pull = {
+                "Type": "Skill", "Element": "Special Persist Test",
+                "Tier": "Transcendent", "LuckValue": 0,
+            }
+            first = sync_roll_instances([pull], path=path)[0]
+            saved_group = first["special_modifiers"]
+            second = sync_roll_instances([pull], path=path)[0]
+            self.assertEqual(second["id"], first["id"])
+            self.assertTrue(second["special_modifiers_generated"])
+            self.assertEqual(second["special_modifiers"], saved_group)
+            self.assertEqual(
+                get_inventory(path)[0]["special_modifiers"], saved_group
+            )
+
     def test_legacy_inventory_instance_gets_modifiers_on_next_sync(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "inventory.json")
