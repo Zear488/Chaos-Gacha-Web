@@ -103,7 +103,7 @@ def parse_history_csv(content):
         special_text = row.get("SpecialModifiers", "")
         if "SpecialModifiers" in row:
             try:
-                special = json.loads(special_text)
+                special = json.loads(special_text) if special_text.strip() else None
             except (TypeError, json.JSONDecodeError) as exc:
                 raise ValueError(f"Invalid SpecialModifiers JSON on CSV line {line_number}.") from exc
             if special is not None:
