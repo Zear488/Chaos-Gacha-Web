@@ -16,6 +16,7 @@ from typing import Any, Dict, Iterable, List
 
 from .tracker import DISCARD_TP_BY_TIER
 from .modifier_generator import ensure_roll_modifiers
+from .special_modifier_generator import ensure_roll_special_modifiers
 
 INVENTORY_FILE = os.path.join("gacha_log", "inventory.json")
 INVENTORY_VERSION = 1
@@ -140,6 +141,9 @@ def sync_roll_instances(
         imported_modifiers = row_data.pop("_roll_modifiers", None)
         imported_generated = row_data.pop("_roll_modifiers_generated", None)
         imported_version = row_data.pop("_roll_modifier_generation_version", None)
+        imported_special = row_data.pop("_roll_special_modifiers", None)
+        imported_special_generated = row_data.pop("_roll_special_modifiers_generated", None)
+        imported_special_version = row_data.pop("_roll_special_modifier_generation_version", None)
         pull = row_data
         fingerprint = _fingerprint(pull)
         occurrence = occurrences[fingerprint]
@@ -193,8 +197,24 @@ def sync_roll_instances(
                 instance["modifier_generation_version"] = imported_version
                 changed = True
 
-        # Generate once for eligible legacy/new instances and persist on the instance.
+        if imported_special is not None:
+            if instance.get("special_modifiers") != imported_special:
+                instance["special_modifiers"] = imported_special
+                changed = True
+        if imported_special_generated is not None:
+            generated_flag = bool(imported_special_generated)
+            if instance.get("special_modifiers_generated") != generated_flag:
+                instance["special_modifiers_generated"] = generated_flag
+                changed = True
+        if imported_special_version is not None:
+            if instance.get("special_modifier_generation_version") != imported_special_version:
+                instance["special_modifier_generation_version"] = imported_special_version
+                changed = True
+
+        # Each generator is idempotent and persists independently on the same ID.
         if ensure_roll_modifiers(instance):
+            changed = True
+        if ensure_roll_special_modifiers(instance):
             changed = True
 
         synchronized.append(instance)
