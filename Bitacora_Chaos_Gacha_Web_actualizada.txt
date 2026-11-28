@@ -2173,3 +2173,20 @@ Atributos candidatos:
 - Ejecutar suite completa y pruebas manuales de Roll/Multi-Roll,
   import/export CSV y Character Builder. No se han ejecutado todavía.
 - No fusionar PR #20 sin autorización explícita.
+
+
+29.6 Estado Git actualizado
+- PR #20 (corrección del bonus ★ y documentación de arquitectura) aparece
+  actualmente como merged en GitHub. Su merge commit en main es
+  3c29c278766a5110004794eb7430c19081e3c4a9.
+- La fusión de PR #20 no fue ejecutada por el asistente en esta sesión.
+  Al actualizar sus metadatos, GitHub ya lo reportaba cerrado y merged.
+- La implementación especial descrita en esta sección se añadió después
+  de ese merge, sobre la rama docs/special-modifier-architecture.
+- Se abrió PR #21 como draft para proponer esos cambios posteriores:
+  https://github.com/Zear488/Chaos-Gacha-Web/pull/21
+- PR #21 permanece abierto, draft y sin fusionar.
+- No se ejecutaron tests automatizados ni validación manual. El intento
+  de clonar el repositorio para ejecutar pruebas localmente no pudo
+  completarse por falta de resolución de github.com en el entorno.
+- No fusionar PR #21 sin autorización explícita del usuario.
