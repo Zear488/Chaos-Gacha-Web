@@ -21,16 +21,17 @@ class StatsManagerModifierTests(unittest.TestCase):
         ])
         self.assertAlmostEqual(self.manager.finalize()["STR"], 23.0, places=2)
 
-    def test_star_bonus_globally_amplifies_all_stats(self):
+    def test_star_bonus_amplifies_only_random_modifier_contribution(self):
         self.manager.add_stats({"STR": 3})
         self.manager.add_random_modifiers([
             {"stat": "STR", "kind": "flat", "value": 5},
             {"stat": "STR", "kind": "percent", "value": 5},
         ])
         final = self.manager.finalize(star_count=2)
-        self.assertAlmostEqual(final["STR"], 32.175, places=2)
-        # Mana has no random modifier, but still receives the global star bonus.
-        self.assertAlmostEqual(final["Mana"], 1.10, places=2)
+        # Base 20 + descriptive 3 + random contribution 6.25 * 1.20.
+        self.assertAlmostEqual(final["STR"], 30.50, places=2)
+        # A stat without random modifiers is not affected by star bonuses.
+        self.assertAlmostEqual(final["Mana"], 1.00, places=2)
 
     def test_star_bonus_is_capped_at_four(self):
         self.manager.add_random_modifiers([
@@ -40,6 +41,8 @@ class StatsManagerModifierTests(unittest.TestCase):
             self.manager.finalize(star_count=99)["STR"],
             self.manager.finalize(star_count=4)["STR"],
         )
+        # Four equipped stars mean +40% to the random contribution.
+        self.assertAlmostEqual(self.manager.finalize(star_count=4)["STR"], 34.0, places=2)
 
     def test_case_insensitive_stat_names(self):
         self.manager.add_random_modifiers([

@@ -1832,3 +1832,275 @@ MOTIVO
 - Cambios de esta etapa: Gacha_app.py y Bitacora_Chaos_Gacha_Web_actualizada.txt.
 - No se han ejecutado tests ni una sesión de navegador en esta etapa.
 - No fusionar esta rama sin autorización explícita del usuario.
+
+
+======================================================================
+27. DISEÑO DE MODIFICADORES ESPECIALES Y CORRECCIÓN DEL BONUS ★ (27-11-2026)
+======================================================================
+
+27.1 Separación funcional obligatoria
+- Cada instancia elegible conserva dos grupos independientes:
+  1) modifiers: sistema normal ya existente, con TIER_RULES, límites de
+     cantidad, rangos flat/percent y Luck.
+  2) special_modifiers: sistema especial futuro, con su propia generación,
+     límites/rangos/probabilidades y versión.
+- Generar un modificador especial nunca consume, reemplaza ni cuenta como
+  espacio del grupo normal.
+- Ambos grupos pertenecen a la misma instancia/ID persistente en
+  gacha_log/inventory.json.
+- Una instancia se procesa una sola vez en cada generador; recargar, filtrar,
+  equipar/desequipar o exportar no debe volver a sortear ninguno.
+- Solo los grupos de la instancia equipada participan en Character Builder.
+- Item continúa excluido salvo decisión futura explícita.
+
+27.2 Esquema de persistencia propuesto (NO IMPLEMENTADO)
+En cada objeto de inventory.json:
+{
+  "id": "instance-001",
+  "status": "equipped",
+  "modifiers_generated": true,
+  "modifier_generation_version": 1,
+  "modifiers": [
+    {"stat": "STR", "kind": "flat", "value": 8.0}
+  ],
+  "special_modifiers_generated": true,
+  "special_modifier_generation_version": 1,
+  "special_modifiers": [
+    {"type": "resistance", "target": "Fire", "value": 12.5, "unit": "%"},
+    {"type": "critical_chance", "target": "Critical Chance", "value": 3.0, "unit": "%"},
+    {"type": "critical_damage", "target": "Critical Damage", "value": 15.0, "unit": "%"},
+    {"type": "additional_field", "target": "Stealth", "value": 8.0, "unit": "%"}
+  ]
+}
+- Los ejemplos son ilustrativos de estructura, NO son rangos aprobados ni
+  probabilidades de generación.
+- El campo type identifica el destino; target conserva la clave que se
+  mostrará en el personaje; value es numérico y unit permite extensión.
+- Se deberá validar type contra un conjunto de tipos conocidos y permitir
+  additional_field con una clave textual validada.
+- No reutilizar stat/kind del sistema normal para evitar que los efectos
+  especiales se sumen accidentalmente a STR/AGI u otros atributos base.
+- La ausencia de campos especiales en inventarios antiguos equivale a
+  "todavía no generado", sin invalidar la instancia ni re-generar los
+  modificadores normales.
+
+27.3 Exportación e importación CSV propuesta (NO IMPLEMENTADA)
+Añadir columnas independientes:
+- SpecialModifiers
+- SpecialModifiersGenerated
+- SpecialModifierGenerationVersion
+SpecialModifiers contendrá JSON compacto con la lista completa.
+- Mantener las columnas actuales Modifiers, ModifiersGenerated y
+  ModifierGenerationVersion sin cambios.
+- Los CSV antiguos sin columnas especiales deben seguir importándose.
+- Los CSV nuevos deben preservar por ID los dos grupos y sus flags/versiones.
+- Validar JSON, tipo de lista, campos, unidades y valores numéricos antes
+  de sincronizar el inventario.
+- Exportación/importación no debe convertir metadatos especiales en campos
+  normales del pull ni incluirlos en el fingerprint.
+
+27.4 Proyección al Character Builder
+- type=resistance: acumular por target en Character.resistances, junto con
+  la salida descriptiva #RESISTANCES, manteniendo visible qué fuente aportó
+  el valor cuando sea posible.
+- type=critical_chance y type=critical_damage: exponer como campos numéricos
+  en Additional Fields (o una estructura tipada equivalente) con sus unidades.
+- type=additional_field: añadir una entrada configurable a Additional Fields.
+- No combinar silenciosamente una resistencia porcentual con un campo
+  textual del perfil manual; mantener separadas las fuentes hasta definir
+  reglas de conflicto.
+- El Character Builder es una ficha narrativa: estos valores no afectan
+  el motor gacha ni simulan combate.
+- El esquema debe permitir añadir destinos nuevos sin modificar el formato
+  de los modificadores normales.
+
+27.5 Generación: decisiones pendientes antes de codificar
+- Definir si todos los tiers elegibles reciben special modifiers o solo
+  determinados tiers.
+- Definir cantidad mínima/máxima independiente por tier.
+- Definir pesos de tipo/destino (resistance, critical chance, critical
+  damage, additional field).
+- Definir rangos por tier y unidad.
+- Decidir si Luck influye en probabilidad de slot y/o magnitud especial,
+  o si los especiales son independientes de Luck.
+- Definir si se permiten varios modificadores del mismo target en una
+  instancia y cómo se acumulan entre instancias equipadas.
+- Definir reglas de generación para categorías elegibles; no asumir Item.
+- Definir si estrellas afectan solo modificadores normales (regla vigente)
+  o también especiales. No extender el bonus ★ a especiales sin aprobación.
+- Crear un generador y pruebas separados, por ejemplo
+  logic/special_modifier_generator.py y tests/test_special_modifier_generator.py,
+  reutilizando roll_manager solo para persistencia por ID cuando sea adecuado.
+- No generar datos especiales por ahora: no se han acordado rangos,
+  probabilidades ni distribución.
+
+27.6 Corrección del bonus de estrella ★
+- La especificación confirmada anteriormente es +10% por instancia equipada
+  con estrella, hasta cuatro instancias (+40%).
+- Cada estrella amplifica solamente la contribución de modificadores
+  aleatorios normales, no la estadística base ni los tags descriptivos
+  #STATS. No se aplica a modificadores especiales salvo decisión posterior.
+- Fórmula:
+  S_final = S_base + D + ((S_base + F) * (1 + P/100) - S_base) * (1 + 0.10*N)
+  donde D son tags descriptivos #STATS, F suma flat, P suma porcentajes y
+  N es el número de instancias equipadas con estrella (máximo 4).
+- Se encontró que character/stats_manager.py en main aplicaba 5% por
+  estrella y multiplicaba toda la estadística final, incluyendo base y
+  #STATS. Esto contradecía la especificación.
+- En esta rama se corrigió a 10% y se limitó el multiplicador a la
+  contribución aleatoria normal. La detección de estrella y el máximo de
+  cuatro se mantienen.
+- Se actualizaron tests/test_stats_manager_modifiers.py para verificar que
+  los valores base/descriptivos no se amplifican y que cuatro estrellas
+  equivalen a +40% de la contribución aleatoria.
+- No se ha ejecutado la suite; la corrección está pendiente de validación.
+
+27.7 Estado de esta rama
+- Rama: docs/special-modifier-architecture.
+- Archivos modificados: character/stats_manager.py,
+  tests/test_stats_manager_modifiers.py y esta bitácora.
+- No se implementó generador especial ni columnas CSV especiales.
+- No se modificaron TIER_RULES, probabilidades gacha, TP, progresión,
+  ni generación normal.
+- No se ejecutaron tests ni validación manual de Streamlit.
+- PR separado y sin fusionar; no fusionar sin autorización explícita.
+
+
+======================================================================
+28. TAXONOMÍA Y REGLAS INICIALES DE MODIFICADORES ESPECIALES (27-11-2026)
+======================================================================
+
+28.1 Regla de familia única por pull
+- Un pull puede generar cero o un grupo especial.
+- Si genera un grupo especial, todos los efectos especiales de esa instancia
+  pertenecen a UNA sola de estas cuatro familias:
+  A) Resistencias elementales / ambientales.
+  B) Estadísticas inusuales / creativas.
+  C) Estadísticas de erotismo / seducción / intimidad.
+  D) Otras estadísticas raras / interesantes.
+- Un mismo pull puede contener varios atributos especiales, siempre que
+  todos pertenezcan a la misma familia. Nunca mezclar familias en una
+  instancia.
+- Esta regla es independiente de los modificadores normales. Un pull puede
+  generar su grupo normal y, además, un grupo especial.
+- La cantidad y los límites de modificadores normales no se alteran ni se
+  consumen por los especiales.
+- La familia especial se guarda explícitamente en el grupo para poder
+  filtrarla, mostrarla y validarla.
+
+28.2 Familia A: Resistencias elementales / ambientales
+Atributos candidatos:
+- Resistencia al Fuego.
+- Resistencia al Hielo.
+- Resistencia al Rayo.
+- Resistencia al Veneno.
+- Resistencia al Ácido.
+- Resistencia a la Corrosión (degradación persistente de armadura/equipo).
+- Resistencia a la Radiación (efectos persistentes sobre atributos).
+- Resistencia al Vacío / Presión.
+- Resistencia Psíquica.
+- Resistencia a la Corrupción.
+- Afinidad Elemental (potenciar o absorber un elemento, no solo resistirlo).
+
+28.3 Familia B: Estadísticas inusuales / creativas
+Atributos candidatos:
+- Estabilidad Mental.
+- Fortuna / Karma.
+- Carisma Oscuro.
+- Instinto de Supervivencia.
+- Adaptabilidad.
+- Resonancia.
+- Eco del Alma.
+
+28.4 Familia C: Erotismo / seducción / intimidad
+Atributos candidatos:
+- Atractivo / Magnetismo Sexual.
+- Sensibilidad.
+- Resistencia al Placer.
+- Dominancia / Sumisión.
+- Afinidad Emocional.
+- Libido / Deseo.
+- Control del Orgasmo.
+- Feromonas / Aura Sensual.
+- Experiencia Íntima.
+- Vulnerabilidad Emocional.
+- Se registran como atributos narrativos/relacionales configurables; no
+  representan mecánicas de combate ni afectan el motor gacha.
+
+28.5 Familia D: Otras estadísticas raras / interesantes
+Atributos candidatos:
+- Sombra.
+- Presencia.
+- Resonancia Temporal.
+- Umbral del Dolor.
+- Eco de Sangre.
+- Afinidad con lo Prohibido.
+
+28.6 Rareza y valores
+- La generación especial debe ser más rara que la generación normal.
+- Los valores especiales son porcentuales.
+- Los valores altos pueden alcanzar rangos cualitativos descriptivos, por
+  ejemplo: resistencia extrema, inmunidad, absorción o counter.
+- Esos descriptores no se asignan todavía a porcentajes concretos. Hace
+  falta definir umbrales por atributo/familia; inmunidad/absorción/counter
+  no deben inferirse usando un único umbral global sin considerar el efecto.
+- Para afinidades, la semántica puede ser potencia/absorción en lugar de
+  resistencia; se debe guardar el modo del efecto para no confundirlos.
+- No se fijan todavía tasas de aparición, pesos de familia, cantidad por
+  tier ni rangos porcentuales. Son decisiones pendientes y no deben
+  inventarse en el generador.
+
+28.7 Bonus de estrella ★ en especiales
+- El usuario confirmó que el impulso porcentual del bonus de estrella
+  también puede afectar las estadísticas especiales, además de las normales.
+- Se mantiene +10% por instancia equipada con estrella, hasta cuatro
+  instancias (+40%).
+- Se aplica al valor/contribución especial porcentual, no cambia el valor
+  base del personaje ni consume espacios normales.
+- Esta regla reemplaza la limitación anterior que excluía los especiales
+  del bonus de estrella.
+- La implementación deberá aplicar el bonus una sola vez y mostrar con
+  claridad el valor original y el valor final cuando sea útil.
+- La estrella no vuelve más probable la generación especial; solo amplifica
+  el resultado generado.
+
+28.8 Persistencia y visualización
+- Cada instancia conserva su familia y su lista especial separadas de
+  modifiers normales.
+- Propuesta de forma:
+  special_modifiers: {
+    "family": "resistance",
+    "effects": [
+      {"stat": "Fire Resistance", "kind": "resistance", "value": 12.5,
+       "unit": "%", "mode": "resist"}
+    ]
+  }
+- La forma anterior es orientativa; el esquema final debe soportar:
+  resistencia, afinidad/potenciación, absorción, inmunidad/counter y
+  campos narrativos porcentuales.
+- El grupo especial debe almacenarse por ID, incluir flags y versión de
+  generación, exportarse/importarse por columnas CSV separadas y ser
+  compatible con inventarios/CSV antiguos sin datos especiales.
+- En Character Builder, mostrar la familia como encabezado y cada efecto
+  debajo, en Resistances o Additional Fields según su tipo.
+- Los valores especiales solo tienen efecto en la ficha narrativa; no
+  alteran pulls, probabilidades gacha, TP ni progresión.
+
+28.9 Decisiones que siguen pendientes
+- Probabilidad de que un pull obtenga grupo especial y su relación con tier.
+- Pesos de selección entre las cuatro familias.
+- Cantidad de efectos por grupo especial.
+- Rangos porcentuales por atributo y tier.
+- Umbrales de descriptor: resistencia alta, inmunidad, absorción y counter.
+- Reglas específicas de afinidad elemental y sus modos.
+- Si se permiten duplicados del mismo atributo dentro de un grupo.
+- Cómo se acumulan efectos iguales entre varias instancias equipadas.
+- Si ciertos atributos deben ser solo descriptivos o tener presentación
+  especial en Additional Fields.
+- Estas decisiones deben resolverse antes de escribir el generador.
+
+28.10 Estado
+- Diseño conceptual documentado; no hay generación especial implementada.
+- Los modificadores normales mantienen su funcionamiento y límites.
+- La familia única por pull y la aplicación del bonus ★ a especiales quedan
+  confirmadas como reglas de diseño.
