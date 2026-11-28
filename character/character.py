@@ -24,6 +24,7 @@ class Character:
         self.stats = None
         self.resistances = {}
         self.other_fields = {}
+        self.special_effects = {}
 
     # ---------------------
     # LOADERS
@@ -66,6 +67,7 @@ class Character:
             self.load_equipped_rolls()
 
         star_count = 0
+        pending_special_effects = []
         for instance in self.equipped_rolls:
             pull = instance.get("pull", {})
             if not isinstance(pull, dict):
@@ -73,6 +75,12 @@ class Character:
 
             if _has_star_bonus(pull):
                 star_count += 1
+
+            special_group = instance.get("special_modifiers")
+            if isinstance(special_group, dict) and isinstance(special_group.get("effects"), list):
+                for effect in special_group["effects"]:
+                    if isinstance(effect, dict):
+                        pending_special_effects.append((special_group.get("family", "unknown"), dict(effect)))
 
             modifiers = instance.get("modifiers", [])
             if modifiers:
@@ -92,6 +100,32 @@ class Character:
                         self.other_fields.setdefault(tag, []).append(value)
 
         self.stats.set_star_count(star_count)
+
+        # Star bonus amplifies special-effect magnitudes once, independently
+        # from normal stat modifiers. Effects remain grouped by their family.
+        special_multiplier = 1 + 0.10 * min(star_count, 4)
+        for family, effect in pending_special_effects:
+            value = effect.get("value", 0)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            final_value = round(value * special_multiplier, 2)
+            displayed = dict(effect)
+            displayed["base_value"] = value
+            displayed["value"] = final_value
+            displayed["star_multiplier"] = special_multiplier
+            self.special_effects.setdefault(family, []).append(displayed)
+            if effect.get("type") == "resistance":
+                target = effect.get("target", "Unknown")
+                self.resistances[target] = self.resistances.get(target, 0) + final_value
+            else:
+                target = effect.get("target", "Unknown")
+                self.other_fields.setdefault("Special Attributes", []).append({
+                    "family": family,
+                    "target": target,
+                    "value": final_value,
+                    "unit": effect.get("unit", "%"),
+                    "mode": effect.get("mode", "bonus"),
+                })
 
     def load_free_categories(self, folder="characterfiles", report=None):
         for name in ["race", "class", "lineage", "talent", "element",
@@ -116,5 +150,6 @@ class Character:
             "profile": profile,
             "stats": final_stats,
             "resistances": self.resistances,
-            "fields": self.other_fields
+            "fields": self.other_fields,
+            "special_effects": self.special_effects
         }
