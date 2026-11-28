@@ -188,6 +188,27 @@ def _decode_and_validate(content: bytes) -> tuple[dict, list]:
                     or modifier.get("value") < 0
                 ):
                     raise ValueError(f"Invalid modifier data for ID {roll_id}.")
+            special_group = instance.get("special_modifiers")
+            if special_group is not None:
+                if (not isinstance(special_group, dict)
+                    or special_group.get("family") not in {
+                        "resistances", "unusual", "intimacy", "rare"
+                    }
+                    or not isinstance(special_group.get("effects"), list)
+                    or not special_group["effects"]):
+                    raise ValueError(f"Invalid special modifier group for ID {roll_id}.")
+                for effect in special_group["effects"]:
+                    if (
+                        not isinstance(effect, dict)
+                        or not isinstance(effect.get("type"), str)
+                        or not isinstance(effect.get("target"), str)
+                        or not isinstance(effect.get("mode"), str)
+                        or effect.get("unit") != "%"
+                        or isinstance(effect.get("value"), bool)
+                        or not isinstance(effect.get("value"), (int, float))
+                        or effect.get("value") < 0
+                    ):
+                        raise ValueError(f"Invalid special modifier effect for ID {roll_id}.")
             inventory_by_id[roll_id] = instance
 
         seen_csv_ids = set()

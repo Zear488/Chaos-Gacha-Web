@@ -28,6 +28,7 @@ class HistoryCsvRoundTripTests(unittest.TestCase):
                 "ID", "Status", "Type", "Element", "Rarity", "Tier",
                 "LuckValue", "Luck", "Description", "Color", "Notes",
                 "Modifiers", "ModifiersGenerated", "ModifierGenerationVersion",
+                "SpecialModifiers", "SpecialModifiersGenerated", "SpecialModifierGenerationVersion",
             ):
                 self.assertIn(column, header)
 
@@ -54,6 +55,15 @@ class HistoryCsvRoundTripTests(unittest.TestCase):
             ]
             original["modifiers_generated"] = True
             original["modifier_generation_version"] = 1
+            original["special_modifiers"] = {
+                "family": "resistances",
+                "effects": [{
+                    "type": "resistance", "target": "Fire Resistance",
+                    "mode": "resist", "value": 12.5, "unit": "%",
+                }],
+            }
+            original["special_modifiers_generated"] = True
+            original["special_modifier_generation_version"] = 1
 
             csv_text = serialize_history_csv([pull], [original])
             imported = parse_history_csv(csv_text)
@@ -65,6 +75,9 @@ class HistoryCsvRoundTripTests(unittest.TestCase):
             self.assertEqual(saved["modifiers"], original["modifiers"])
             self.assertTrue(saved["modifiers_generated"])
             self.assertEqual(saved["modifier_generation_version"], 1)
+            self.assertEqual(saved["special_modifiers"], original["special_modifiers"])
+            self.assertTrue(saved["special_modifiers_generated"])
+            self.assertEqual(saved["special_modifier_generation_version"], 1)
 
 
     def test_imported_stored_roll_can_be_equipped(self):

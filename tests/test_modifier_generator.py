@@ -14,6 +14,7 @@ from logic.modifier_generator import (
     roll_magnitude,
 )
 from logic.roll_manager import sync_roll_instances, get_inventory
+from logic.special_modifier_generator import generate_special_modifiers
 
 
 class ModifierGeneratorTests(unittest.TestCase):
@@ -81,6 +82,32 @@ class ModifierGeneratorTests(unittest.TestCase):
             [],
         )
 
+    def test_special_generation_is_independent_and_uses_one_family(self):
+        class FixedRandom:
+            def __init__(self):
+                self.calls = 0
+            def random(self):
+                self.calls += 1
+                return 0.0
+            def choice(self, values):
+                return "resistances"
+            def sample(self, values, count):
+                return list(values)[:count]
+
+        result = generate_special_modifiers(
+            {"Type": "Skill", "Tier": "Rare", "LuckValue": 0},
+            FixedRandom(),
+        )
+        self.assertEqual(result["family"], "resistances")
+        self.assertEqual(len(result["effects"]), 2)
+        self.assertTrue(all(effect["unit"] == "%" for effect in result["effects"]))
+
+    def test_special_generation_excludes_items(self):
+        self.assertIsNone(generate_special_modifiers(
+            {"Type": "Item", "Tier": "Divine", "LuckValue": 0},
+            random.Random(1),
+        ))
+
     def test_sync_persists_modifiers_once_per_instance(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "inventory.json")
@@ -95,6 +122,23 @@ class ModifierGeneratorTests(unittest.TestCase):
             self.assertEqual(second[0]["modifiers"], saved_first)
             self.assertTrue(second[0]["modifiers_generated"])
             self.assertEqual(get_inventory(path)[0]["modifiers"], saved_first)
+
+    def test_special_modifiers_are_persisted_once_per_instance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "inventory.json")
+            pull = {
+                "Type": "Skill", "Element": "Special Persist Test",
+                "Tier": "Transcendent", "LuckValue": 0,
+            }
+            first = sync_roll_instances([pull], path=path)[0]
+            saved_group = first["special_modifiers"]
+            second = sync_roll_instances([pull], path=path)[0]
+            self.assertEqual(second["id"], first["id"])
+            self.assertTrue(second["special_modifiers_generated"])
+            self.assertEqual(second["special_modifiers"], saved_group)
+            self.assertEqual(
+                get_inventory(path)[0]["special_modifiers"], saved_group
+            )
 
     def test_legacy_inventory_instance_gets_modifiers_on_next_sync(self):
         with tempfile.TemporaryDirectory() as directory:

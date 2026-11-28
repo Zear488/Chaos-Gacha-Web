@@ -15,6 +15,7 @@ EXPORT_COLUMNS = (
     "ID", "Status", "Type", "Element", "Rarity", "Tier",
     "LuckValue", "Luck", "Description", "Color", "Notes",
     "Modifiers", "ModifiersGenerated", "ModifierGenerationVersion",
+    "SpecialModifiers", "SpecialModifiersGenerated", "SpecialModifierGenerationVersion",
 )
 VALID_STATUSES = {"stored", "equipped", "discarded"}
 
@@ -99,6 +100,35 @@ def parse_history_csv(content):
                     raise ValueError(
                         f"Invalid ModifierGenerationVersion on CSV line {line_number}."
                     ) from exc
+        special_text = row.get("SpecialModifiers", "")
+        if "SpecialModifiers" in row:
+            try:
+                special = json.loads(special_text) if special_text.strip() else None
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise ValueError(f"Invalid SpecialModifiers JSON on CSV line {line_number}.") from exc
+            if special is not None:
+                if not isinstance(special, dict) or not isinstance(special.get("family"), str) or not isinstance(special.get("effects"), list):
+                    raise ValueError(f"SpecialModifiers must contain family and effects on CSV line {line_number}.")
+                for effect in special["effects"]:
+                    if (not isinstance(effect, dict) or not isinstance(effect.get("type"), str)
+                        or not isinstance(effect.get("target"), str)
+                        or not isinstance(effect.get("mode"), str)
+                        or effect.get("unit") != "%"
+                        or isinstance(effect.get("value"), bool)
+                        or not isinstance(effect.get("value"), (int, float))
+                        or effect.get("value") < 0):
+                        raise ValueError(f"Invalid special effect on CSV line {line_number}.")
+            pull["_roll_special_modifiers"] = special
+            pull["_roll_special_modifiers_generated"] = (
+                str(row.get("SpecialModifiersGenerated", "true")).strip().lower()
+                in {"true", "1", "yes"}
+            )
+            version = row.get("SpecialModifierGenerationVersion", "")
+            if version:
+                try:
+                    pull["_roll_special_modifier_generation_version"] = int(version)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"Invalid SpecialModifierGenerationVersion on CSV line {line_number}.") from exc
         rows.append(pull)
     return rows
 
@@ -139,5 +169,8 @@ def serialize_history_csv(history_rows, inventory_instances):
             "Modifiers": json.dumps(modifiers, ensure_ascii=False, separators=(",", ":")),
             "ModifiersGenerated": str(bool(instance.get("modifiers_generated", False))).lower(),
             "ModifierGenerationVersion": instance.get("modifier_generation_version", ""),
+            "SpecialModifiers": json.dumps(instance.get("special_modifiers"), ensure_ascii=False, separators=(",", ":")) if instance.get("special_modifiers") is not None else "",
+            "SpecialModifiersGenerated": str(bool(instance.get("special_modifiers_generated", False))).lower(),
+            "SpecialModifierGenerationVersion": instance.get("special_modifier_generation_version", ""),
         })
     return output.getvalue()
