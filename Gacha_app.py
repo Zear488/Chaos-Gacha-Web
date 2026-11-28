@@ -1186,8 +1186,7 @@ if st.session_state["show_individual_inventory_toggle"]:
                                 )
                             else:
                                 st.info(
-                                    "★ Star bonus: +5% to all final character stats "
-                                    "while this pull is equipped."
+                                    "★ Star bonus: +10% per equipped star (up to +40%) to random modifier contributions, including special effects."
                                 )
 
                         description = str(selected_pull.get("Description", "")).strip()
