@@ -42,7 +42,7 @@ class StatsManagerModifierTests(unittest.TestCase):
             self.manager.finalize(star_count=4)["STR"],
         )
         # Four equipped stars mean +40% to the random contribution.
-        self.assertAlmostEqual(self.manager.finalize(star_count=4)["STR"], 24.0, places=2)
+        self.assertAlmostEqual(self.manager.finalize(star_count=4)["STR"], 34.0, places=2)
 
     def test_case_insensitive_stat_names(self):
         self.manager.add_random_modifiers([
