@@ -101,7 +101,7 @@ def parse_history_csv(content):
                         f"Invalid ModifierGenerationVersion on CSV line {line_number}."
                     ) from exc
         special_text = row.get("SpecialModifiers", "")
-        if special_text:
+        if "SpecialModifiers" in row:
             try:
                 special = json.loads(special_text)
             except (TypeError, json.JSONDecodeError) as exc:
