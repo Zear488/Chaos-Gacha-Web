@@ -2104,3 +2104,72 @@ Atributos candidatos:
 - Los modificadores normales mantienen su funcionamiento y límites.
 - La familia única por pull y la aplicación del bonus ★ a especiales quedan
   confirmadas como reglas de diseño.
+
+
+======================================================================
+29. IMPLEMENTACIÓN INICIAL DE MODIFICADORES ESPECIALES (27-11-2026)
+======================================================================
+
+29.1 Decisiones confirmadas
+- Probabilidad independiente de 25% por pull elegible: promedio estadístico
+  de un grupo especial cada cuatro pulls, no una garantía por bloques.
+- Cada grupo puede contener varios efectos, siguiendo la misma regla de
+  cantidad por tier y slot extra por Luck que el generador normal.
+- Todos los efectos de una misma instancia pertenecen a una sola familia.
+- El grupo especial no consume slots normales ni altera sus resultados.
+- La familia y efectos se conservan en la misma instancia/ID del inventario.
+- Los especiales se generan de forma independiente; la tirada normal no
+  depende de que aparezca un grupo especial y viceversa.
+
+29.2 Implementación añadida en esta rama
+- Nuevo logic/special_modifier_generator.py.
+- Tirada de aparición especial de 25%, independiente de Luck.
+- Tras aparecer, selección de una familia y cantidad de efectos usando
+  modifier_count() del generador normal, por lo que se reutilizan los mismos
+  límites por tier y probabilidad de slot extra por Luck.
+- Magnitud porcentual usa los rangos percent existentes por tier y la misma
+  curva de Luck. Esta es una decisión provisional de implementación basada
+  en "las mismas reglas"; requiere revisión porque los rangos percent fueron
+  diseñados originalmente para stats normales y no definen inmunidad,
+  absorción ni counter.
+- Se eligen targets distintos dentro de la familia para evitar duplicados
+  dentro del mismo grupo.
+- Las cuatro familias y sus atributos candidatos se representan mediante
+  catálogos separados. La familia A tiene resistencias y afinidad elemental;
+  las otras familias contienen atributos narrativos porcentuales.
+- Se mantienen excluidos Item y Trash, como en el generador normal.
+
+29.3 Persistencia y CSV
+- roll_manager sincroniza cada grupo especial una sola vez por instancia,
+  con flags y versión independientes.
+- CSV añade SpecialModifiers, SpecialModifiersGenerated y
+  SpecialModifierGenerationVersion. Se conserva la columna Modifiers normal.
+- SpecialModifiers almacena un objeto JSON con family y effects; un pull
+  sin grupo conserva el flag generated=true y el valor especial vacío.
+- Importación antigua sin columnas especiales sigue siendo aceptada.
+- Los metadatos especiales se eliminan antes de calcular fingerprint,
+  por lo que no alteran la identidad de la tirada.
+- ZIP de personaje incluye inventory.json, de modo que conserva campos
+  especiales al exportar/restaurar. La validación del ZIP aún debe ampliarse
+  para validar explícitamente la estructura especial.
+
+29.4 Character Builder
+- Solo las instancias equipadas aportan efectos.
+- Resistencias especiales se suman al apartado Resistances.
+- Otros atributos especiales aparecen en Additional Fields y se conservan
+  agrupados por familia en Special Modifier Groups.
+- El bonus ★ se aplica a la magnitud especial: +10% por cada instancia
+  equipada con estrella, máximo cuatro. La generación no se ve afectada.
+- La hoja narrativa no afecta el motor gacha.
+
+29.5 Pendientes y validación
+- Revisar si se deben aprobar los rangos percent existentes como rangos
+  especiales o definir rangos separados por atributo/familia/tier.
+- Definir umbrales y semántica para resistencia elevada, inmunidad,
+  absorción y counter; todavía no se implementan descriptores automáticos.
+- Definir si algunos atributos especiales necesitan modos o presentación
+  más específicos en Character Builder.
+- Extender pruebas para CSV, persistencia, bonus estrella especial y ZIP.
+- Ejecutar suite completa y pruebas manuales de Roll/Multi-Roll,
+  import/export CSV y Character Builder. No se han ejecutado todavía.
+- No fusionar PR #20 sin autorización explícita.
