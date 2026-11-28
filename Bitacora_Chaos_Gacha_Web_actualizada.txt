@@ -1832,3 +1832,135 @@ MOTIVO
 - Cambios de esta etapa: Gacha_app.py y Bitacora_Chaos_Gacha_Web_actualizada.txt.
 - No se han ejecutado tests ni una sesión de navegador en esta etapa.
 - No fusionar esta rama sin autorización explícita del usuario.
+
+
+======================================================================
+27. DISEÑO DE MODIFICADORES ESPECIALES Y CORRECCIÓN DEL BONUS ★ (27-11-2026)
+======================================================================
+
+27.1 Separación funcional obligatoria
+- Cada instancia elegible conserva dos grupos independientes:
+  1) modifiers: sistema normal ya existente, con TIER_RULES, límites de
+     cantidad, rangos flat/percent y Luck.
+  2) special_modifiers: sistema especial futuro, con su propia generación,
+     límites/rangos/probabilidades y versión.
+- Generar un modificador especial nunca consume, reemplaza ni cuenta como
+  espacio del grupo normal.
+- Ambos grupos pertenecen a la misma instancia/ID persistente en
+  gacha_log/inventory.json.
+- Una instancia se procesa una sola vez en cada generador; recargar, filtrar,
+  equipar/desequipar o exportar no debe volver a sortear ninguno.
+- Solo los grupos de la instancia equipada participan en Character Builder.
+- Item continúa excluido salvo decisión futura explícita.
+
+27.2 Esquema de persistencia propuesto (NO IMPLEMENTADO)
+En cada objeto de inventory.json:
+{
+  "id": "instance-001",
+  "status": "equipped",
+  "modifiers_generated": true,
+  "modifier_generation_version": 1,
+  "modifiers": [
+    {"stat": "STR", "kind": "flat", "value": 8.0}
+  ],
+  "special_modifiers_generated": true,
+  "special_modifier_generation_version": 1,
+  "special_modifiers": [
+    {"type": "resistance", "target": "Fire", "value": 12.5, "unit": "%"},
+    {"type": "critical_chance", "target": "Critical Chance", "value": 3.0, "unit": "%"},
+    {"type": "critical_damage", "target": "Critical Damage", "value": 15.0, "unit": "%"},
+    {"type": "additional_field", "target": "Stealth", "value": 8.0, "unit": "%"}
+  ]
+}
+- Los ejemplos son ilustrativos de estructura, NO son rangos aprobados ni
+  probabilidades de generación.
+- El campo type identifica el destino; target conserva la clave que se
+  mostrará en el personaje; value es numérico y unit permite extensión.
+- Se deberá validar type contra un conjunto de tipos conocidos y permitir
+  additional_field con una clave textual validada.
+- No reutilizar stat/kind del sistema normal para evitar que los efectos
+  especiales se sumen accidentalmente a STR/AGI u otros atributos base.
+- La ausencia de campos especiales en inventarios antiguos equivale a
+  "todavía no generado", sin invalidar la instancia ni re-generar los
+  modificadores normales.
+
+27.3 Exportación e importación CSV propuesta (NO IMPLEMENTADA)
+Añadir columnas independientes:
+- SpecialModifiers
+- SpecialModifiersGenerated
+- SpecialModifierGenerationVersion
+SpecialModifiers contendrá JSON compacto con la lista completa.
+- Mantener las columnas actuales Modifiers, ModifiersGenerated y
+  ModifierGenerationVersion sin cambios.
+- Los CSV antiguos sin columnas especiales deben seguir importándose.
+- Los CSV nuevos deben preservar por ID los dos grupos y sus flags/versiones.
+- Validar JSON, tipo de lista, campos, unidades y valores numéricos antes
+  de sincronizar el inventario.
+- Exportación/importación no debe convertir metadatos especiales en campos
+  normales del pull ni incluirlos en el fingerprint.
+
+27.4 Proyección al Character Builder
+- type=resistance: acumular por target en Character.resistances, junto con
+  la salida descriptiva #RESISTANCES, manteniendo visible qué fuente aportó
+  el valor cuando sea posible.
+- type=critical_chance y type=critical_damage: exponer como campos numéricos
+  en Additional Fields (o una estructura tipada equivalente) con sus unidades.
+- type=additional_field: añadir una entrada configurable a Additional Fields.
+- No combinar silenciosamente una resistencia porcentual con un campo
+  textual del perfil manual; mantener separadas las fuentes hasta definir
+  reglas de conflicto.
+- El Character Builder es una ficha narrativa: estos valores no afectan
+  el motor gacha ni simulan combate.
+- El esquema debe permitir añadir destinos nuevos sin modificar el formato
+  de los modificadores normales.
+
+27.5 Generación: decisiones pendientes antes de codificar
+- Definir si todos los tiers elegibles reciben special modifiers o solo
+  determinados tiers.
+- Definir cantidad mínima/máxima independiente por tier.
+- Definir pesos de tipo/destino (resistance, critical chance, critical
+  damage, additional field).
+- Definir rangos por tier y unidad.
+- Decidir si Luck influye en probabilidad de slot y/o magnitud especial,
+  o si los especiales son independientes de Luck.
+- Definir si se permiten varios modificadores del mismo target en una
+  instancia y cómo se acumulan entre instancias equipadas.
+- Definir reglas de generación para categorías elegibles; no asumir Item.
+- Definir si estrellas afectan solo modificadores normales (regla vigente)
+  o también especiales. No extender el bonus ★ a especiales sin aprobación.
+- Crear un generador y pruebas separados, por ejemplo
+  logic/special_modifier_generator.py y tests/test_special_modifier_generator.py,
+  reutilizando roll_manager solo para persistencia por ID cuando sea adecuado.
+- No generar datos especiales por ahora: no se han acordado rangos,
+  probabilidades ni distribución.
+
+27.6 Corrección del bonus de estrella ★
+- La especificación confirmada anteriormente es +10% por instancia equipada
+  con estrella, hasta cuatro instancias (+40%).
+- Cada estrella amplifica solamente la contribución de modificadores
+  aleatorios normales, no la estadística base ni los tags descriptivos
+  #STATS. No se aplica a modificadores especiales salvo decisión posterior.
+- Fórmula:
+  S_final = S_base + D + ((S_base + F) * (1 + P/100) - S_base) * (1 + 0.10*N)
+  donde D son tags descriptivos #STATS, F suma flat, P suma porcentajes y
+  N es el número de instancias equipadas con estrella (máximo 4).
+- Se encontró que character/stats_manager.py en main aplicaba 5% por
+  estrella y multiplicaba toda la estadística final, incluyendo base y
+  #STATS. Esto contradecía la especificación.
+- En esta rama se corrigió a 10% y se limitó el multiplicador a la
+  contribución aleatoria normal. La detección de estrella y el máximo de
+  cuatro se mantienen.
+- Se actualizaron tests/test_stats_manager_modifiers.py para verificar que
+  los valores base/descriptivos no se amplifican y que cuatro estrellas
+  equivalen a +40% de la contribución aleatoria.
+- No se ha ejecutado la suite; la corrección está pendiente de validación.
+
+27.7 Estado de esta rama
+- Rama: docs/special-modifier-architecture.
+- Archivos modificados: character/stats_manager.py,
+  tests/test_stats_manager_modifiers.py y esta bitácora.
+- No se implementó generador especial ni columnas CSV especiales.
+- No se modificaron TIER_RULES, probabilidades gacha, TP, progresión,
+  ni generación normal.
+- No se ejecutaron tests ni validación manual de Streamlit.
+- PR separado y sin fusionar; no fusionar sin autorización explícita.
