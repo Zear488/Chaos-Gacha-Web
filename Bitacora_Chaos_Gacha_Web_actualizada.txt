@@ -1964,3 +1964,143 @@ SpecialModifiers contendrá JSON compacto con la lista completa.
   ni generación normal.
 - No se ejecutaron tests ni validación manual de Streamlit.
 - PR separado y sin fusionar; no fusionar sin autorización explícita.
+
+
+======================================================================
+28. TAXONOMÍA Y REGLAS INICIALES DE MODIFICADORES ESPECIALES (27-11-2026)
+======================================================================
+
+28.1 Regla de familia única por pull
+- Un pull puede generar cero o un grupo especial.
+- Si genera un grupo especial, todos los efectos especiales de esa instancia
+  pertenecen a UNA sola de estas cuatro familias:
+  A) Resistencias elementales / ambientales.
+  B) Estadísticas inusuales / creativas.
+  C) Estadísticas de erotismo / seducción / intimidad.
+  D) Otras estadísticas raras / interesantes.
+- Un mismo pull puede contener varios atributos especiales, siempre que
+  todos pertenezcan a la misma familia. Nunca mezclar familias en una
+  instancia.
+- Esta regla es independiente de los modificadores normales. Un pull puede
+  generar su grupo normal y, además, un grupo especial.
+- La cantidad y los límites de modificadores normales no se alteran ni se
+  consumen por los especiales.
+- La familia especial se guarda explícitamente en el grupo para poder
+  filtrarla, mostrarla y validarla.
+
+28.2 Familia A: Resistencias elementales / ambientales
+Atributos candidatos:
+- Resistencia al Fuego.
+- Resistencia al Hielo.
+- Resistencia al Rayo.
+- Resistencia al Veneno.
+- Resistencia al Ácido.
+- Resistencia a la Corrosión (degradación persistente de armadura/equipo).
+- Resistencia a la Radiación (efectos persistentes sobre atributos).
+- Resistencia al Vacío / Presión.
+- Resistencia Psíquica.
+- Resistencia a la Corrupción.
+- Afinidad Elemental (potenciar o absorber un elemento, no solo resistirlo).
+
+28.3 Familia B: Estadísticas inusuales / creativas
+Atributos candidatos:
+- Estabilidad Mental.
+- Fortuna / Karma.
+- Carisma Oscuro.
+- Instinto de Supervivencia.
+- Adaptabilidad.
+- Resonancia.
+- Eco del Alma.
+
+28.4 Familia C: Erotismo / seducción / intimidad
+Atributos candidatos:
+- Atractivo / Magnetismo Sexual.
+- Sensibilidad.
+- Resistencia al Placer.
+- Dominancia / Sumisión.
+- Afinidad Emocional.
+- Libido / Deseo.
+- Control del Orgasmo.
+- Feromonas / Aura Sensual.
+- Experiencia Íntima.
+- Vulnerabilidad Emocional.
+- Se registran como atributos narrativos/relacionales configurables; no
+  representan mecánicas de combate ni afectan el motor gacha.
+
+28.5 Familia D: Otras estadísticas raras / interesantes
+Atributos candidatos:
+- Sombra.
+- Presencia.
+- Resonancia Temporal.
+- Umbral del Dolor.
+- Eco de Sangre.
+- Afinidad con lo Prohibido.
+
+28.6 Rareza y valores
+- La generación especial debe ser más rara que la generación normal.
+- Los valores especiales son porcentuales.
+- Los valores altos pueden alcanzar rangos cualitativos descriptivos, por
+  ejemplo: resistencia extrema, inmunidad, absorción o counter.
+- Esos descriptores no se asignan todavía a porcentajes concretos. Hace
+  falta definir umbrales por atributo/familia; inmunidad/absorción/counter
+  no deben inferirse usando un único umbral global sin considerar el efecto.
+- Para afinidades, la semántica puede ser potencia/absorción en lugar de
+  resistencia; se debe guardar el modo del efecto para no confundirlos.
+- No se fijan todavía tasas de aparición, pesos de familia, cantidad por
+  tier ni rangos porcentuales. Son decisiones pendientes y no deben
+  inventarse en el generador.
+
+28.7 Bonus de estrella ★ en especiales
+- El usuario confirmó que el impulso porcentual del bonus de estrella
+  también puede afectar las estadísticas especiales, además de las normales.
+- Se mantiene +10% por instancia equipada con estrella, hasta cuatro
+  instancias (+40%).
+- Se aplica al valor/contribución especial porcentual, no cambia el valor
+  base del personaje ni consume espacios normales.
+- Esta regla reemplaza la limitación anterior que excluía los especiales
+  del bonus de estrella.
+- La implementación deberá aplicar el bonus una sola vez y mostrar con
+  claridad el valor original y el valor final cuando sea útil.
+- La estrella no vuelve más probable la generación especial; solo amplifica
+  el resultado generado.
+
+28.8 Persistencia y visualización
+- Cada instancia conserva su familia y su lista especial separadas de
+  modifiers normales.
+- Propuesta de forma:
+  special_modifiers: {
+    "family": "resistance",
+    "effects": [
+      {"stat": "Fire Resistance", "kind": "resistance", "value": 12.5,
+       "unit": "%", "mode": "resist"}
+    ]
+  }
+- La forma anterior es orientativa; el esquema final debe soportar:
+  resistencia, afinidad/potenciación, absorción, inmunidad/counter y
+  campos narrativos porcentuales.
+- El grupo especial debe almacenarse por ID, incluir flags y versión de
+  generación, exportarse/importarse por columnas CSV separadas y ser
+  compatible con inventarios/CSV antiguos sin datos especiales.
+- En Character Builder, mostrar la familia como encabezado y cada efecto
+  debajo, en Resistances o Additional Fields según su tipo.
+- Los valores especiales solo tienen efecto en la ficha narrativa; no
+  alteran pulls, probabilidades gacha, TP ni progresión.
+
+28.9 Decisiones que siguen pendientes
+- Probabilidad de que un pull obtenga grupo especial y su relación con tier.
+- Pesos de selección entre las cuatro familias.
+- Cantidad de efectos por grupo especial.
+- Rangos porcentuales por atributo y tier.
+- Umbrales de descriptor: resistencia alta, inmunidad, absorción y counter.
+- Reglas específicas de afinidad elemental y sus modos.
+- Si se permiten duplicados del mismo atributo dentro de un grupo.
+- Cómo se acumulan efectos iguales entre varias instancias equipadas.
+- Si ciertos atributos deben ser solo descriptivos o tener presentación
+  especial en Additional Fields.
+- Estas decisiones deben resolverse antes de escribir el generador.
+
+28.10 Estado
+- Diseño conceptual documentado; no hay generación especial implementada.
+- Los modificadores normales mantienen su funcionamiento y límites.
+- La familia única por pull y la aplicación del bonus ★ a especiales quedan
+  confirmadas como reglas de diseño.
