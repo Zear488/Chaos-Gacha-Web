@@ -984,11 +984,17 @@ if st.session_state["show_individual_inventory_toggle"]:
                             f"{'%' if item.get('kind') == 'percent' else ''}"
                             for item in modifiers
                         ) or "No random modifiers"
+                        special_group = instance.get("special_modifiers") or {}
+                        special_summary = ", ".join(
+                            f"{effect.get('target', '?')} +{float(effect.get('value', 0)):.2f}%"
+                            for effect in special_group.get("effects", [])
+                        ) or "No special modifiers"
                         equipped_rows.append({
                             "Category": pull.get("Type", "Unknown"),
                             "Name": pull.get("Element", "Unknown"),
                             "Tier": pull.get("Tier", "Unknown"),
                             "Modifiers": modifier_summary,
+                            "Special Modifiers": special_summary,
                             "Instance ID": str(instance.get("id", ""))[:8],
                         })
                     st.dataframe(
@@ -1115,6 +1121,22 @@ if st.session_state["show_individual_inventory_toggle"]:
                                 "No persisted random modifiers are available for this pull."
                             )
 
+                        special_group = selected_instance.get("special_modifiers")
+                        if isinstance(special_group, dict):
+                            st.markdown(f"**Special modifiers · {special_group.get('family', 'Unknown family')}**")
+                            special_effect_rows = [
+                                {
+                                    "Attribute": effect.get("target", "Unknown"),
+                                    "Mode": effect.get("mode", "bonus"),
+                                    "Value": f"+{float(effect.get('value', 0)):.2f}%",
+                                }
+                                for effect in special_group.get("effects", [])
+                            ]
+                            if special_effect_rows:
+                                st.dataframe(pd.DataFrame(special_effect_rows), use_container_width=True, hide_index=True)
+                        elif selected_instance.get("special_modifiers_generated"):
+                            st.caption("This pull was checked and did not receive a special modifier group.")
+
                         legacy_stats = {}
                         legacy_resistances = {}
                         for description_line in str(
@@ -1160,7 +1182,7 @@ if st.session_state["show_individual_inventory_toggle"]:
                         if has_star:
                             if selected_instance.get("status") == "equipped":
                                 st.success(
-                                    "★ Equipped star bonus: +5% to all final character stats."
+                                    "★ Equipped star bonus: +10% per equipped star (up to +40%) to random modifier contributions, including special effects."
                                 )
                             else:
                                 st.info(
@@ -1265,6 +1287,9 @@ if st.button("🧪 Generate Character From Gacha", key="generate_character_from_
 
         st.subheader("🔥 Resistances")
         st.json(data["resistances"])
+
+        st.subheader("✨ Special Modifier Groups")
+        st.json(data.get("special_effects", {}))
 
         st.subheader("📚 Additional Fields")
         st.json(data["fields"])
