@@ -14,6 +14,7 @@ from logic.modifier_generator import (
     roll_magnitude,
 )
 from logic.roll_manager import sync_roll_instances, get_inventory
+from logic.special_modifier_generator import generate_special_modifiers
 
 
 class ModifierGeneratorTests(unittest.TestCase):
@@ -80,6 +81,32 @@ class ModifierGeneratorTests(unittest.TestCase):
             generate_modifiers({"Type": "Skill", "Tier": "Trash"}),
             [],
         )
+
+    def test_special_generation_is_independent_and_uses_one_family(self):
+        class FixedRandom:
+            def __init__(self):
+                self.calls = 0
+            def random(self):
+                self.calls += 1
+                return 0.0
+            def choice(self, values):
+                return "resistances"
+            def sample(self, values, count):
+                return list(values)[:count]
+
+        result = generate_special_modifiers(
+            {"Type": "Skill", "Tier": "Rare", "LuckValue": 0},
+            FixedRandom(),
+        )
+        self.assertEqual(result["family"], "resistances")
+        self.assertEqual(len(result["effects"]), 2)
+        self.assertTrue(all(effect["unit"] == "%" for effect in result["effects"]))
+
+    def test_special_generation_excludes_items(self):
+        self.assertIsNone(generate_special_modifiers(
+            {"Type": "Item", "Tier": "Divine", "LuckValue": 0},
+            random.Random(1),
+        ))
 
     def test_sync_persists_modifiers_once_per_instance(self):
         with tempfile.TemporaryDirectory() as directory:
